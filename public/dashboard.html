@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Metrics Dashboard</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        margin: 16px;
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0 0 12px;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+      .card {
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 12px 14px;
+      }
+      label {
+        font-size: 12px;
+        color: #374151;
+        display: block;
+        margin-bottom: 6px;
+      }
+      select,
+      input {
+        padding: 8px;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        width: 100%;
+      }
+      button {
+        padding: 10px 14px;
+        border: 0;
+        border-radius: 10px;
+        background: #111827;
+        color: white;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+      }
+      .stat {
+        background: #f9fafb;
+        border-radius: 10px;
+        padding: 12px;
+      }
+      .stat .v {
+        font-size: 18px;
+        font-weight: 700;
+      }
+      pre {
+        white-space: pre-wrap;
+        background: #f3f4f6;
+        padding: 10px;
+        border-radius: 8px;
+      }
+      .muted {
+        color: #6b7280;
+        font-size: 12px;
+      }
+      @media (max-width: 900px) {
+        .row {
+          grid-template-columns: 1fr;
+        }
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+    <!-- Chart.js (CDN) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  </head>
+  <body>
+    <h1>Metrics Dashboard</h1>
+
+    <div class="row">
+      <div class="card">
+        <label>App</label>
+        <select id="app"></select>
+
+        <div style="height: 8px"></div>
+        <label>API key (auto-fills from config)</label>
+        <input id="apiKey" placeholder="x-api-key if required" />
+
+        <div style="height: 8px"></div>
+        <label>Date range</label>
+        <div class="row" style="grid-template-columns: 1fr 1fr">
+          <input id="from" type="date" />
+          <input id="to" type="date" />
+        </div>
+
+        <div style="height: 10px"></div>
+        <button id="load">Load metrics</button>
+        <div class="muted" id="tip"></div>
+      </div>
+
+      <div class="card grid">
+        <div class="stat">
+          <div class="muted">Total visits</div>
+          <div class="v" id="totalVisits">—</div>
+        </div>
+        <div class="stat">
+          <div class="muted">Avg duration</div>
+          <div class="v" id="avgDur">—</div>
+        </div>
+        <div class="stat">
+          <div class="muted">Days included</div>
+          <div class="v" id="daysCount">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="card">
+        <canvas id="dailyChart" height="180"></canvas>
+      </div>
+      <div class="card">
+        <label>Per-hour (pick a day)</label>
+        <select id="daySelect"></select>
+        <div style="height: 8px"></div>
+        <canvas id="hourChart" height="180"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <details>
+        <summary>Raw response</summary>
+        <pre id="raw">—</pre>
+      </details>
+    </div>
+
+    <script>
+      /** ====== CONFIG ======
+       * If you have /v1/apps endpoint, the app list auto-loads.
+       * Otherwise, set a manual list here:
+       */
+      const CONFIG = {
+        baseUrl: location.origin + "/v1", // same origin. Change to your Render URL if remote.
+        // Optional: map known app -> api key, will auto-fill on selection:
+        appKeys: {
+          repairman: "rKey123",
+          electric: "eKey456",
+          profile: "pKey789",
+        },
+        // Fallback apps list if /v1/apps is not available:
+        fallbackApps: ["repairman", "electric", "profile"],
+      };
+
+      /** ====== DOM ====== */
+      const appEl = document.getElementById("app");
+      const apiKeyEl = document.getElementById("apiKey");
+      const fromEl = document.getElementById("from");
+      const toEl = document.getElementById("to");
+      const loadBtn = document.getElementById("load");
+      const tipEl = document.getElementById("tip");
+      const totalEl = document.getElementById("totalVisits");
+      const avgEl = document.getElementById("avgDur");
+      const daysEl = document.getElementById("daysCount");
+      const rawEl = document.getElementById("raw");
+      const daySelect = document.getElementById("daySelect");
+
+      let dailyChart, hourChart;
+
+      /** ====== helpers ====== */
+      const fmtMs = (ms) => {
+        if (!ms && ms !== 0) return "—";
+        const s = Math.round(ms / 1000);
+        const m = Math.floor(s / 60),
+          r = s % 60;
+        return m ? `${m}m ${r}s` : `${r}s`;
+      };
+      const httpGet = async (url, key) => {
+        const headers = key ? { "x-api-key": key } : {};
+        const res = await fetch(url, { headers });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      };
+
+      const tryLoadApps = async () => {
+        // Try GET /v1/apps if you added that route; else fallback
+        try {
+          const data = await httpGet(
+            CONFIG.baseUrl.replace(/\/v1$/, "/v1/apps"),
+            apiKeyEl.value || undefined
+          );
+          if (Array.isArray(data.apps) && data.apps.length) return data.apps;
+        } catch {}
+        return CONFIG.fallbackApps;
+      };
+
+      const setAppsUI = async () => {
+        const apps = await tryLoadApps();
+        appEl.innerHTML = apps
+          .map((a) => `<option value="${a}">${a}</option>`)
+          .join("");
+        // set default key if configured
+        const first = appEl.value;
+        if (CONFIG.appKeys[first]) apiKeyEl.value = CONFIG.appKeys[first];
+      };
+
+      appEl.addEventListener("change", () => {
+        const a = appEl.value;
+        apiKeyEl.value = CONFIG.appKeys[a] || "";
+      });
+
+      /** ====== charts ====== */
+      const buildDaily = (days) => {
+        const labels = days.map((d) => d.day);
+        const totals = days.map((d) => d.totalVisits);
+        const avg = days.map((d) => Math.round(d.avgDurationMs / 1000)); // in seconds for readability
+
+        if (dailyChart) dailyChart.destroy();
+        const ctx = document.getElementById("dailyChart").getContext("2d");
+        dailyChart = new Chart(ctx, {
+          type: "bar",
+          data: {
+            labels,
+            datasets: [
+              { label: "Visits", data: totals },
+              { label: "Avg duration (sec)", data: avg },
+            ],
+          },
+          options: { responsive: true, maintainAspectRatio: false },
+        });
+      };
+
+      const buildHour = (hourBuckets) => {
+        const labels = Array.from({ length: 24 }, (_, i) =>
+          String(i).padStart(2, "0")
+        );
+        const data = labels.map((h) => hourBuckets[h] || 0);
+
+        if (hourChart) hourChart.destroy();
+        const ctx = document.getElementById("hourChart").getContext("2d");
+        hourChart = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels,
+            datasets: [{ label: "Visits per hour (UTC)", data }],
+          },
+          options: { responsive: true, maintainAspectRatio: false },
+        });
+      };
+
+      /** ====== main load ====== */
+      const loadStats = async () => {
+        loadBtn.disabled = true;
+        tipEl.textContent = "Loading…";
+
+        const app = appEl.value;
+        const key = apiKeyEl.value || undefined;
+        const from = fromEl.value;
+        const to = toEl.value;
+
+        let url = `${CONFIG.baseUrl}/${encodeURIComponent(app)}/stats`;
+        if (from && to) url += `?from=${from}&to=${to}`;
+
+        try {
+          const data = await httpGet(url, key);
+          rawEl.textContent = JSON.stringify(data, null, 2);
+          const days = data.days || [];
+
+          // Top stats
+          const totalVisits = days.reduce(
+            (a, d) => a + (d.totalVisits || 0),
+            0
+          );
+          const avgDur = Math.round(
+            days.reduce((a, d) => a + (d.avgDurationMs || 0), 0) /
+              (days.length || 1)
+          );
+          totalEl.textContent = totalVisits;
+          avgEl.textContent = fmtMs(avgDur);
+          daysEl.textContent = days.length;
+
+          // charts
+          buildDaily(days);
+
+          // per-hour selector
+          daySelect.innerHTML = days
+            .map((d) => `<option value="${d.day}">${d.day}</option>`)
+            .join("");
+          daySelect.onchange = () => {
+            const sel = days.find((d) => d.day === daySelect.value);
+            buildHour(sel ? sel.hourBuckets : {});
+          };
+          if (days[0]) {
+            daySelect.value = days[days.length - 1].day; // latest
+            buildHour(days[days.length - 1].hourBuckets || {});
+          } else {
+            daySelect.innerHTML = "";
+            buildHour({});
+          }
+
+          tipEl.textContent =
+            from && to
+              ? `Showing ${from} → ${to} (UTC)`
+              : `Showing today (UTC)`;
+        } catch (e) {
+          tipEl.textContent = `Error: ${e.message}`;
+          rawEl.textContent = e.stack || String(e);
+          totalEl.textContent = avgEl.textContent = daysEl.textContent = "—";
+          if (dailyChart) dailyChart.destroy();
+          if (hourChart) hourChart.destroy();
+        } finally {
+          loadBtn.disabled = false;
+        }
+      };
+
+      /** init */
+      (async () => {
+        // default range: last 7 days
+        const today = new Date();
+        const endISO = today.toISOString().slice(0, 10);
+        const start = new Date(today);
+        start.setUTCDate(today.getUTCDate() - 6);
+        const startISO = start.toISOString().slice(0, 10);
+        fromEl.value = startISO;
+        toEl.value = endISO;
+
+        await setAppsUI();
+        loadBtn.onclick = loadStats;
+        await loadStats();
+      })();
+    </script>
+  </body>
+</html>

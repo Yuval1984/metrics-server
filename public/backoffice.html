@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Metrics Backoffice</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+      :root {
+        --b: #e5e7eb;
+        --bg: #f9fafb;
+        --fg: #111827;
+        --muted: #6b7280;
+      }
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        margin: 16px;
+        color: var(--fg);
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0 0 12px;
+      }
+      .card {
+        border: 1px solid var(--b);
+        border-radius: 12px;
+        padding: 14px;
+        background: #fff;
+        margin-bottom: 16px;
+      }
+      .muted {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        padding: 10px;
+        border-bottom: 1px solid var(--b);
+        vertical-align: middle;
+      }
+      th {
+        text-align: left;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      input,
+      button {
+        padding: 8px 10px;
+        border: 1px solid var(--b);
+        border-radius: 8px;
+        font-size: 14px;
+      }
+      button {
+        background: #111827;
+        color: #fff;
+        border: 0;
+        cursor: pointer;
+      }
+      button.ghost {
+        background: #fff;
+        color: #111827;
+        border: 1px solid var(--b);
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      input[type="date"] {
+        padding: 7px 8px;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: var(--bg);
+        border: 1px solid var(--b);
+        font-size: 12px;
+      }
+      .log {
+        white-space: pre-wrap;
+        background: var(--bg);
+        border: 1px solid var(--b);
+        border-radius: 10px;
+        padding: 10px;
+        height: 200px;
+        overflow: auto;
+      }
+      .ok {
+        color: #059669;
+      }
+      .err {
+        color: #dc2626;
+      }
+      @media (max-width: 900px) {
+        .row {
+          grid-template-columns: 1fr;
+        }
+        table {
+          display: block;
+          overflow: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Metrics Backoffice</h1>
+
+    <div class="card">
+      <div class="row">
+        <div>
+          <div class="pill">Base URL <code id="baseUrlLabel"></code></div>
+          <div class="muted" style="margin-top: 6px">
+            This page calls your API directly. Make sure CORS allows this
+            origin.
+          </div>
+        </div>
+        <div style="text-align: right">
+          <button class="ghost" id="refreshApps">↻ Refresh Apps</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <table id="appsTable">
+        <thead>
+          <tr>
+            <th>App</th>
+            <th style="width: 220px">API Key (x-api-key)</th>
+            <th>Session</th>
+            <th>Simulate</th>
+            <th>Delete Day</th>
+            <th>Delete All</th>
+          </tr>
+        </thead>
+        <tbody id="appsBody">
+          <!-- rows injected by JS -->
+        </tbody>
+      </table>
+      <div class="muted" style="margin-top: 8px">
+        Tip: “Quick Visit (3s)” runs Start → (2s) Heartbeat → (1s) End.
+      </div>
+    </div>
+
+    <div class="card">
+      <strong>Log</strong>
+      <div id="log" class="log"></div>
+    </div>
+
+    <script>
+      /** ===== CONFIG =====
+       * Change baseUrl if your API is remote (e.g. Render):
+       * baseUrl: "https://your-app.onrender.com/v1"
+       */
+      const CONFIG = {
+        baseUrl: location.origin + "/v1",
+        // Pre-fill keys per app (optional). If you added API_KEYS in your server .env, mirror them here for convenience.
+        appKeys: {
+          repairman: "rKey123",
+          electric: "eKey456",
+          profile: "pKey789",
+        },
+        // Fallback list if /v1/apps is not available:
+        fallbackApps: ["repairman", "electric", "profile"],
+      };
+
+      document.getElementById("baseUrlLabel").textContent = CONFIG.baseUrl;
+
+      /** ===== Helpers ===== */
+      const logEl = document.getElementById("log");
+      function logLine(msg, ok = true) {
+        const line = document.createElement("div");
+        line.className = ok ? "ok" : "err";
+        line.textContent = msg;
+        logEl.appendChild(line);
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      async function http(method, url, key, body) {
+        const headers = {};
+        if (key) headers["x-api-key"] = key;
+        if (body) headers["Content-Type"] = "application/json";
+        const res = await fetch(url, {
+          method,
+          headers,
+          body: body ? JSON.stringify(body) : undefined,
+        });
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          throw new Error(`HTTP ${res.status} ${res.statusText} – ${txt}`);
+        }
+        const ct = res.headers.get("content-type") || "";
+        if (ct.includes("application/json")) return res.json();
+        return res.text();
+      }
+
+      async function getApps(keyForList) {
+        // try /v1/apps (if you added it). If unauthorized, pass the first known key.
+        try {
+          return (
+            (
+              await http(
+                "GET",
+                CONFIG.baseUrl.replace(/\/v1$/, "/v1/apps"),
+                keyForList
+              )
+            ).apps || []
+          );
+        } catch {
+          return CONFIG.fallbackApps;
+        }
+      }
+
+      /** ===== State ===== */
+      const sessionByApp = new Map(); // app -> sessionId
+      const keyByApp = new Map(); // app -> key (from input)
+
+      /** ===== UI ===== */
+      function appRow(app) {
+        const tr = document.createElement("tr");
+
+        // App label
+        const tdApp = document.createElement("td");
+        tdApp.textContent = app;
+        tr.appendChild(tdApp);
+
+        // Key input
+        const tdKey = document.createElement("td");
+        const keyInput = document.createElement("input");
+        keyInput.placeholder = "x-api-key";
+        keyInput.value = CONFIG.appKeys[app] || "";
+        keyByApp.set(app, keyInput.value || "");
+        keyInput.oninput = () => keyByApp.set(app, keyInput.value);
+        tdKey.appendChild(keyInput);
+        tr.appendChild(tdKey);
+
+        // Session controls
+        const tdSess = document.createElement("td");
+        const sessIdSpan = document.createElement("span");
+        sessIdSpan.className = "muted";
+        sessIdSpan.textContent = "—";
+        tdSess.appendChild(sessIdSpan);
+        tr.appendChild(tdSess);
+
+        // Simulate buttons
+        const tdSim = document.createElement("td");
+        const btnStart = mkBtn("Start", async () => {
+          try {
+            const key = keyByApp.get(app) || undefined;
+            const data = await http(
+              "POST",
+              `${CONFIG.baseUrl}/${app}/start`,
+              key
+            );
+            sessionByApp.set(app, data.sessionId);
+            sessIdSpan.textContent = data.sessionId;
+            logLine(`[${app}] start → ${data.sessionId}`);
+          } catch (e) {
+            logLine(`[${app}] start failed: ${e.message}`, false);
+          }
+        });
+        const btnHb = mkBtn("Heartbeat", async () => {
+          const sid = sessionByApp.get(app);
+          if (!sid)
+            return logLine(`[${app}] no sessionId – click Start first`, false);
+          try {
+            const key = keyByApp.get(app) || undefined;
+            await http("POST", `${CONFIG.baseUrl}/${app}/heartbeat`, key, {
+              sessionId: sid,
+            });
+            logLine(`[${app}] heartbeat → ${sid}`);
+          } catch (e) {
+            logLine(`[${app}] heartbeat failed: ${e.message}`, false);
+          }
+        });
+        const btnEnd = mkBtn("End", async () => {
+          const sid = sessionByApp.get(app);
+          if (!sid)
+            return logLine(`[${app}] no sessionId – click Start first`, false);
+          try {
+            const key = keyByApp.get(app) || undefined;
+            await http("POST", `${CONFIG.baseUrl}/${app}/end`, key, {
+              sessionId: sid,
+            });
+            logLine(`[${app}] end → ${sid}`);
+            sessionByApp.delete(app);
+            sessIdSpan.textContent = "—";
+          } catch (e) {
+            logLine(`[${app}] end failed: ${e.message}`, false);
+          }
+        });
+        const btnQuick = mkBtn("Quick Visit (3s)", async () => {
+          try {
+            const key = keyByApp.get(app) || undefined;
+            const data = await http(
+              "POST",
+              `${CONFIG.baseUrl}/${app}/start`,
+              key
+            );
+            const sid = data.sessionId;
+            sessionByApp.set(app, sid);
+            sessIdSpan.textContent = sid;
+            logLine(`[${app}] quick visit: start → ${sid}`);
+            await sleep(2000);
+            await http("POST", `${CONFIG.baseUrl}/${app}/heartbeat`, key, {
+              sessionId: sid,
+            });
+            logLine(`[${app}] quick visit: heartbeat`);
+            await sleep(1000);
+            await http("POST", `${CONFIG.baseUrl}/${app}/end`, key, {
+              sessionId: sid,
+            });
+            logLine(`[${app}] quick visit: end`);
+            sessionByApp.delete(app);
+            sessIdSpan.textContent = "—";
+          } catch (e) {
+            logLine(`[${app}] quick visit failed: ${e.message}`, false);
+          }
+        });
+
+        tdSim.append(
+          btnStart,
+          space(),
+          btnHb,
+          space(),
+          btnEnd,
+          space(),
+          btnQuick
+        );
+        tr.appendChild(tdSim);
+
+        // Delete day
+        const tdDelDay = document.createElement("td");
+        const dayInput = document.createElement("input");
+        dayInput.type = "date";
+        dayInput.value = new Date().toISOString().slice(0, 10); // today
+        const btnDelDay = mkBtn("Delete Day", async () => {
+          const key = keyByApp.get(app) || undefined;
+          if (!key) return logLine(`[${app}] reset requires API key`, false);
+          const day = dayInput.value;
+          if (!day) return logLine(`[${app}] choose a day`, false);
+          try {
+            await http(
+              "DELETE",
+              `${CONFIG.baseUrl}/${app}/reset?day=${encodeURIComponent(day)}`,
+              key
+            );
+            logLine(`[${app}] deleted day ${day}`);
+          } catch (e) {
+            logLine(`[${app}] delete day failed: ${e.message}`, false);
+          }
+        });
+        tdDelDay.append(dayInput, space(), btnDelDay);
+        tr.appendChild(tdDelDay);
+
+        // Delete all
+        const tdDelAll = document.createElement("td");
+        const btnDelAll = mkBtn("Delete ALL", async () => {
+          const key = keyByApp.get(app) || undefined;
+          if (!key) return logLine(`[${app}] reset requires API key`, false);
+          if (!confirm(`Delete ALL data for "${app}"?`)) return;
+          try {
+            await http("DELETE", `${CONFIG.baseUrl}/${app}/reset`, key);
+            logLine(`[${app}] deleted ALL data`);
+          } catch (e) {
+            logLine(`[${app}] delete all failed: ${e.message}`, false);
+          }
+        });
+        tdDelAll.append(btnDelAll);
+        tr.appendChild(tdDelAll);
+
+        return tr;
+      }
+
+      function mkBtn(text, onClick) {
+        const b = document.createElement("button");
+        b.textContent = text;
+        b.onclick = async () => {
+          b.disabled = true;
+          try {
+            await onClick();
+          } finally {
+            b.disabled = false;
+          }
+        };
+        return b;
+      }
+      function space() {
+        const s = document.createElement("span");
+        s.style.display = "inline-block";
+        s.style.width = "8px";
+        return s;
+      }
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+      async function renderTable() {
+        const appsBody = document.getElementById("appsBody");
+        appsBody.innerHTML = "";
+        // try to fetch apps using the first known key if any
+        const firstKnownKey = Object.values(CONFIG.appKeys)[0] || undefined;
+        const apps = await getApps(firstKnownKey);
+        for (const app of apps) {
+          appsBody.appendChild(appRow(app));
+        }
+      }
+
+      document.getElementById("refreshApps").onclick = renderTable;
+
+      // init
+      renderTable();
+    </script>
+  </body>
+</html>
