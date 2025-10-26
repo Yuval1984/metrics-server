@@ -22,7 +22,15 @@ function requireKey(req, res, next) {
   if (!Object.keys(API_KEYS).length) return next();
   const want = API_KEYS[req.params.app];
   const got = req.header("x-api-key");
-  if (!want || got !== want) return res.status(401).json({ error: "unauthorized" });
+  
+  // If app doesn't exist in API_KEYS, allow any API key (for new apps)
+  if (!want) {
+    if (!got) return res.status(401).json({ error: "API key required" });
+    return next();
+  }
+  
+  // If app exists in API_KEYS, validate the key
+  if (got !== want) return res.status(401).json({ error: "unauthorized" });
   next();
 }
 
@@ -132,6 +140,76 @@ router.get("/:app/stats", requireKey, async (req, res) => {
   res.json({ tz: "UTC", days: [await aggregateDay(app, today)] });
 });
 
+// Real-time status - active sessions
+router.get("/:app/status", requireKey, async (req, res) => {
+  const { app } = req.params;
+  const today = new Date().toISOString().slice(0, 10);
+  const file = dayFile(app, today);
+  
+  const activeSessions = [];
+  const sessions = new Map();
+  
+  try {
+    await new Promise((resolve) => {
+      const rl = readline.createInterface({ input: createReadStream(file), crlfDelay: Infinity });
+      rl.on("line", (line) => {
+        if (!line.trim()) return;
+        let e;
+        try {
+          e = JSON.parse(line);
+        } catch {
+          return;
+        }
+        const { type, ts, sessionId } = e;
+        if (!sessionId) return;
+        
+        let s = sessions.get(sessionId);
+        if (!s) {
+          s = { startedAt: null, lastSeenAt: null, ended: false };
+          sessions.set(sessionId, s);
+        }
+
+        if (type === "start") {
+          s.startedAt = ts;
+          s.lastSeenAt = ts;
+        } else if (type === "heartbeat") {
+          s.lastSeenAt = Math.max(s.lastSeenAt ?? 0, ts);
+        } else if (type === "end") {
+          s.ended = true;
+        }
+      });
+      rl.on("close", resolve);
+      rl.on("error", () => resolve());
+    });
+
+    const now = Date.now();
+    const fiveMinutesAgo = now - (5 * 60 * 1000);
+    
+    for (const [sessionId, session] of sessions.entries()) {
+      if (!session.ended && session.lastSeenAt && session.lastSeenAt > fiveMinutesAgo) {
+        activeSessions.push({
+          sessionId,
+          startedAt: new Date(session.startedAt).toISOString(),
+          lastSeenAt: new Date(session.lastSeenAt).toISOString(),
+          secondsSinceLastSeen: Math.floor((now - session.lastSeenAt) / 1000),
+          sessionDurationSeconds: Math.floor((now - session.startedAt) / 1000)
+        });
+      }
+    }
+    
+    activeSessions.sort((a, b) => new Date(b.lastSeenAt) - new Date(a.lastSeenAt));
+    
+  } catch (error) {
+    // File doesn't exist or other error - return empty result
+  }
+  
+  res.json({
+    app,
+    activeSessions: activeSessions.length,
+    sessions: activeSessions
+  });
+});
+
 // DELETE /v1/:app/reset[?day=YYYY-MM-DD]
 // Only allowed when an API key is configured for that app and provided correctly.
 router.delete("/:app/reset", requireKey, async (req, res) => {
@@ -159,6 +237,24 @@ router.delete("/:app/reset", requireKey, async (req, res) => {
     }
   } catch {
     return res.status(404).json({ error: "not found" });
+  }
+});
+
+// Get all apps from file system
+router.get("/apps", async (req, res) => {
+  try {
+    const apps = [];
+    const entries = await readdir(DATA_ROOT, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        apps.push(entry.name);
+      }
+    }
+    apps.sort();
+    res.json({ apps });
+  } catch (error) {
+    console.error("Failed to fetch apps:", error);
+    res.status(500).json({ error: "Failed to fetch apps" });
   }
 });
 

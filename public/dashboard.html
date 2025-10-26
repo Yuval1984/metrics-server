@@ -22,13 +22,14 @@
       .card {
         border: 1px solid #e5e7eb;
         border-radius: 12px;
-        padding: 12px 14px;
+        padding: 16px 18px;
       }
       label {
         font-size: 12px;
         color: #374151;
         display: block;
         margin-bottom: 6px;
+        font-weight: 500;
       }
       select,
       input {
@@ -36,6 +37,8 @@
         border: 1px solid #d1d5db;
         border-radius: 8px;
         width: 100%;
+        box-sizing: border-box;
+        font-size: 14px;
       }
       button {
         padding: 10px 14px;
@@ -57,11 +60,47 @@
       .stat {
         background: #f9fafb;
         border-radius: 10px;
-        padding: 12px;
+        padding: 16px;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        min-height: 100px;
+        position: relative;
+      }
+      .stat .muted {
+        font-size: 16px;
+        font-weight: 600;
+        color: #374151;
+        position: absolute;
+        top: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        margin: 0;
       }
       .stat .v {
-        font-size: 18px;
+        font-size: 28px;
         font-weight: 700;
+        margin: 0;
+      }
+      .stat:nth-child(1) .v {
+        color: #3b82f6; /* Blue for Total visits */
+      }
+      .stat:nth-child(2) .v {
+        color: #10b981; /* Green for Avg duration */
+      }
+      .stat:nth-child(3) .v {
+        color: #f59e0b; /* Orange for Days included */
+      }
+      .stat:nth-child(4) .v {
+        color: #8b5cf6; /* Purple for Today visits */
+      }
+      .stat:nth-child(5) .v {
+        color: #ef4444; /* Red for Month visits */
+      }
+      .stat:nth-child(6) .v {
+        color: #06b6d4; /* Cyan for Total duration */
       }
       pre {
         white-space: pre-wrap;
@@ -73,6 +112,30 @@
         color: #6b7280;
         font-size: 12px;
       }
+      canvas {
+        max-height: 180px;
+        width: 100% !important;
+        height: 180px !important;
+      }
+      .form-group {
+        margin-bottom: 16px;
+      }
+      .form-group:last-child {
+        margin-bottom: 0;
+      }
+      .error-message {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        color: #dc2626;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 14px;
+        margin-top: 8px;
+        display: none;
+      }
+      .error-message.show {
+        display: block;
+      }
       @media (max-width: 900px) {
         .row {
           grid-template-columns: 1fr;
@@ -83,58 +146,136 @@
       }
     </style>
     <!-- Chart.js (CDN) -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
   </head>
   <body>
-    <h1>Metrics Dashboard</h1>
+    <div
+      style="
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+      "
+    >
+      <h1 style="margin: 0">Metrics Dashboard</h1>
+      <button
+        onclick="window.location.href='backoffice.html'"
+        style="
+          padding: 8px 16px;
+          background: #6b7280;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+          font-size: 14px;
+        "
+      >
+        📊 Backoffice
+      </button>
+    </div>
 
     <div class="row">
       <div class="card">
-        <label>App</label>
-        <select id="app"></select>
+        <div class="form-group">
+          <label>App</label>
+          <select id="app"></select>
+        </div>
 
-        <div style="height: 8px"></div>
-        <label>API key (auto-fills from config)</label>
-        <input id="apiKey" placeholder="x-api-key if required" />
+        <div class="form-group">
+          <label>API key (auto-fills from config)</label>
+          <input id="apiKey" placeholder="x-api-key if required" />
+        </div>
 
-        <div style="height: 8px"></div>
-        <label>Date range</label>
-        <div class="row" style="grid-template-columns: 1fr 1fr">
-          <input id="from" type="date" />
-          <input id="to" type="date" />
+        <div class="form-group">
+          <label>Date range</label>
+          <div class="row" style="grid-template-columns: 1fr 1fr">
+            <input id="from" type="date" />
+            <input id="to" type="date" />
+          </div>
         </div>
 
         <div style="height: 10px"></div>
         <button id="load">Load metrics</button>
         <div class="muted" id="tip"></div>
+        <div class="error-message" id="errorMessage"></div>
+
+        <!-- Real-time status -->
+        <div style="margin-top: 16px">
+          <div
+            style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 12px;
+            "
+          >
+            <h3 style="margin: 0; font-size: 16px">Real-time Status</h3>
+            <button
+              id="refreshStatus"
+              style="
+                padding: 6px 12px;
+                background: #3b82f6;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 12px;
+              "
+            >
+              🔄 Refresh
+            </button>
+          </div>
+          <div id="realtimeStatus">
+            <div class="muted">Loading active sessions...</div>
+          </div>
+        </div>
       </div>
 
-      <div class="card grid">
-        <div class="stat">
-          <div class="muted">Total visits</div>
-          <div class="v" id="totalVisits">—</div>
+      <div style="display: flex; flex-direction: column; gap: 16px">
+        <!-- Main visits metrics -->
+        <div class="card grid">
+          <div class="stat">
+            <div class="muted">Total visits</div>
+            <div class="v" id="totalVisits">—</div>
+          </div>
+          <div class="stat">
+            <div class="muted">Avg duration</div>
+            <div class="v" id="avgDur">—</div>
+          </div>
+          <div class="stat">
+            <div class="muted">Days included</div>
+            <div class="v" id="daysCount">—</div>
+          </div>
         </div>
-        <div class="stat">
-          <div class="muted">Avg duration</div>
-          <div class="v" id="avgDur">—</div>
+
+        <!-- Additional metrics -->
+        <div class="card grid">
+          <div class="stat">
+            <div class="muted">Today visits</div>
+            <div class="v" id="todayVisits">—</div>
+          </div>
+          <div class="stat">
+            <div class="muted">Month visits</div>
+            <div class="v" id="monthVisits">—</div>
+          </div>
+          <div class="stat">
+            <div class="muted">Total duration</div>
+            <div class="v" id="totalDuration">—</div>
+          </div>
         </div>
-        <div class="stat">
-          <div class="muted">Days included</div>
-          <div class="v" id="daysCount">—</div>
+
+        <!-- Per-hour chart -->
+        <div class="card">
+          <label>Per-hour (pick a day)</label>
+          <select id="daySelect"></select>
+          <div style="height: 8px"></div>
+          <canvas id="hourChart" height="180"></canvas>
         </div>
       </div>
     </div>
 
-    <div class="row">
-      <div class="card">
-        <canvas id="dailyChart" height="180"></canvas>
-      </div>
-      <div class="card">
-        <label>Per-hour (pick a day)</label>
-        <select id="daySelect"></select>
-        <div style="height: 8px"></div>
-        <canvas id="hourChart" height="180"></canvas>
-      </div>
+    <div class="card">
+      <canvas id="dailyChart" height="180"></canvas>
     </div>
 
     <div class="card">
@@ -161,6 +302,18 @@
         fallbackApps: ["repairman", "electric", "profile"],
       };
 
+      // Load API keys from database
+      async function loadApiKeys() {
+        try {
+          const response = await httpGet(`${CONFIG.baseUrl}/api-keys`);
+          CONFIG.appKeys = { ...CONFIG.appKeys, ...response.apiKeys };
+        } catch (error) {
+          console.log(
+            "Could not load API keys from database, using hardcoded keys"
+          );
+        }
+      }
+
       /** ====== DOM ====== */
       const appEl = document.getElementById("app");
       const apiKeyEl = document.getElementById("apiKey");
@@ -171,8 +324,14 @@
       const totalEl = document.getElementById("totalVisits");
       const avgEl = document.getElementById("avgDur");
       const daysEl = document.getElementById("daysCount");
+      const todayEl = document.getElementById("todayVisits");
+      const monthEl = document.getElementById("monthVisits");
+      const totalDurEl = document.getElementById("totalDuration");
       const rawEl = document.getElementById("raw");
       const daySelect = document.getElementById("daySelect");
+      const errorEl = document.getElementById("errorMessage");
+      const realtimeStatusEl = document.getElementById("realtimeStatus");
+      const refreshStatusBtn = document.getElementById("refreshStatus");
 
       let dailyChart, hourChart;
 
@@ -187,8 +346,216 @@
       const httpGet = async (url, key) => {
         const headers = key ? { "x-api-key": key } : {};
         const res = await fetch(url, { headers });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+          let errorMsg = `HTTP ${res.status}`;
+          if (res.status === 401) {
+            errorMsg =
+              "API key required or invalid. Please check your API key configuration.";
+          } else if (res.status === 403) {
+            errorMsg = "Access forbidden. API key may be invalid or expired.";
+          } else if (res.status === 404) {
+            errorMsg = "App not found. Please check the app name.";
+          } else if (res.status >= 500) {
+            errorMsg = "Server error. Please try again later.";
+          }
+          // Add debug info for status endpoint
+          if (url.includes("/status")) {
+            errorMsg += ` (Status endpoint: ${res.status})`;
+          }
+          throw new Error(errorMsg);
+        }
         return res.json();
+      };
+
+      const httpPost = async (url, key, body) => {
+        const headers = {
+          "Content-Type": "application/json",
+          ...(key ? { "x-api-key": key } : {}),
+        };
+        const res = await fetch(url, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          let errorMsg = `HTTP ${res.status}`;
+          if (res.status === 401) {
+            errorMsg =
+              "API key required or invalid. Please check your API key configuration.";
+          } else if (res.status === 403) {
+            errorMsg = "Access forbidden. API key may be invalid or expired.";
+          } else if (res.status === 404) {
+            errorMsg = "App not found. Please check the app name.";
+          } else if (res.status >= 500) {
+            errorMsg = "Server error. Please try again later.";
+          }
+          throw new Error(errorMsg);
+        }
+        return res.json();
+      };
+
+      const showError = (message) => {
+        errorEl.textContent = message;
+        errorEl.classList.add("show");
+        tipEl.textContent = "";
+      };
+
+      const hideError = () => {
+        errorEl.classList.remove("show");
+        errorEl.textContent = "";
+      };
+
+      // Clean session function
+      const cleanSession = async (sessionId, app) => {
+        const key = apiKeyEl.value || undefined;
+        try {
+          await httpPost(
+            `${CONFIG.baseUrl}/${encodeURIComponent(app)}/end`,
+            key,
+            {
+              sessionId: sessionId,
+            }
+          );
+          // Refresh the real-time status after cleaning
+          await loadRealtimeStatus();
+        } catch (error) {
+          console.error("Failed to clean session:", error);
+          showError(`Failed to clean session: ${error.message}`);
+        }
+      };
+
+      const loadRealtimeStatus = async () => {
+        const app = appEl.value;
+        const key = apiKeyEl.value || undefined;
+
+        if (!app) {
+          realtimeStatusEl.innerHTML =
+            '<div class="muted">Please select an app to view real-time status.</div>';
+          return;
+        }
+
+        try {
+          const data = await httpGet(
+            `${CONFIG.baseUrl}/${encodeURIComponent(app)}/status`,
+            key
+          );
+
+          if (data.activeSessions === 0) {
+            realtimeStatusEl.innerHTML =
+              '<div class="muted">No active sessions</div>';
+            return;
+          }
+
+          const sessionsHtml = `
+            <div style="overflow-x: auto;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                <thead>
+                  <tr style="background: #f9fafb; border-bottom: 2px solid #e5e7eb;">
+                    <th style="padding: 8px; text-align: left; font-weight: 600; color: #374151;">Session ID</th>
+                    <th style="padding: 8px; text-align: left; font-weight: 600; color: #374151;">IP Address</th>
+                    <th style="padding: 8px; text-align: left; font-weight: 600; color: #374151;">Device Type</th>
+                    <th style="padding: 8px; text-align: left; font-weight: 600; color: #374151;">Country</th>
+                    <th style="padding: 8px; text-align: left; font-weight: 600; color: #374151;">City</th>
+                    <th style="padding: 8px; text-align: left; font-weight: 600; color: #374151;">Status</th>
+                    <th style="padding: 8px; text-align: left; font-weight: 600; color: #374151;">Duration</th>
+                    <th style="padding: 8px; text-align: left; font-weight: 600; color: #374151;">Last Seen</th>
+                    <th style="padding: 8px; text-align: left; font-weight: 600; color: #374151;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${data.sessions
+                    .map((session) => {
+                      const statusColor =
+                        session.secondsSinceLastSeen < 60
+                          ? "#10b981"
+                          : session.secondsSinceLastSeen < 300
+                          ? "#f59e0b"
+                          : "#ef4444";
+                      const statusText =
+                        session.secondsSinceLastSeen < 60
+                          ? "Active"
+                          : session.secondsSinceLastSeen < 300
+                          ? "Idle"
+                          : "Stale";
+
+                      const deviceIcon =
+                        session.deviceType === "mobile"
+                          ? "📱"
+                          : session.deviceType === "tablet"
+                          ? "📱"
+                          : "💻";
+
+                      const deviceTypeText = session.deviceType || "Unknown";
+                      const deviceDisplay = `${deviceIcon} ${deviceTypeText}`;
+
+                      return `
+                        <tr style="border-bottom: 1px solid #e5e7eb;">
+                          <td style="padding: 8px; font-family: monospace; font-weight: 600;">${session.sessionId.slice(
+                            0,
+                            8
+                          )}...</td>
+                          <td style="padding: 8px; font-family: monospace;">${
+                            session.ipAddress || "Unknown"
+                          }</td>
+                          <td style="padding: 8px;">${deviceDisplay}</td>
+                          <td style="padding: 8px;">${
+                            session.country || "Unknown"
+                          }</td>
+                          <td style="padding: 8px;">${
+                            session.city || "Unknown"
+                          }</td>
+                          <td style="padding: 8px;">
+                            <span style="color: ${statusColor}; font-weight: 600;">${statusText}</span>
+                          </td>
+                          <td style="padding: 8px;">${fmtMs(
+                            session.sessionDurationSeconds * 1000
+                          )}</td>
+                          <td style="padding: 8px;">${
+                            session.secondsSinceLastSeen
+                          }s ago</td>
+                          <td style="padding: 8px;">
+                            ${
+                              statusText === "Idle" || statusText === "Stale"
+                                ? `<button onclick="cleanSession('${session.sessionId}', '${app}')" style="padding: 4px 8px; background: #f59e0b; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600;">Clean</button>`
+                                : "—"
+                            }
+                          </td>
+                        </tr>
+                      `;
+                    })
+                    .join("")}
+                </tbody>
+              </table>
+            </div>
+          `;
+
+          realtimeStatusEl.innerHTML = `
+            <div style="margin-bottom: 12px;">
+              <span style="font-size: 14px; font-weight: 600;">${
+                data.activeSessions
+              } active session${data.activeSessions !== 1 ? "s" : ""}</span>
+            </div>
+            ${sessionsHtml}
+          `;
+        } catch (e) {
+          // Handle specific error cases
+          if (e.message.includes("API key required")) {
+            realtimeStatusEl.innerHTML = `
+              <div style="color: #f59e0b; font-size: 14px; padding: 8px; background: #fef3c7; border: 1px solid #fbbf24; border-radius: 6px;">
+                ⚠️ API key required for "${app}". Please configure an API key for this app to view real-time status.
+              </div>
+            `;
+          } else {
+            realtimeStatusEl.innerHTML = `
+              <div style="color: #ef4444; font-size: 14px;">
+                Error loading status: ${e.message}
+                <br><small style="color: #6b7280;">Debug: URL was ${
+                  CONFIG.baseUrl
+                }/${encodeURIComponent(app)}/status</small>
+              </div>
+            `;
+          }
+        }
       };
 
       const tryLoadApps = async () => {
@@ -216,7 +583,14 @@
       appEl.addEventListener("change", () => {
         const a = appEl.value;
         apiKeyEl.value = CONFIG.appKeys[a] || "";
+        // Auto-load metrics when app changes
+        loadStats();
+        // Also load real-time status
+        loadRealtimeStatus();
       });
+
+      // Refresh button for real-time status
+      refreshStatusBtn.addEventListener("click", loadRealtimeStatus);
 
       /** ====== charts ====== */
       const buildDaily = (days) => {
@@ -231,11 +605,49 @@
           data: {
             labels,
             datasets: [
-              { label: "Visits", data: totals },
-              { label: "Avg duration (sec)", data: avg },
+              {
+                label: "Visits",
+                data: totals,
+                backgroundColor: "#e5e7eb",
+                borderColor: "#d1d5db",
+                borderWidth: 1,
+                hoverBackgroundColor: "#3b82f6",
+                hoverBorderColor: "#2563eb",
+                hoverBorderWidth: 2,
+              },
+              {
+                label: "Avg duration (sec)",
+                data: avg,
+                backgroundColor: "#9ca3af",
+                borderColor: "#6b7280",
+                borderWidth: 1,
+                hoverBackgroundColor: "#10b981",
+                hoverBorderColor: "#059669",
+                hoverBorderWidth: 2,
+              },
             ],
           },
-          options: { responsive: true, maintainAspectRatio: false },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  precision: 0,
+                },
+              },
+            },
+            plugins: {
+              legend: {
+                display: true,
+              },
+            },
+            interaction: {
+              intersect: false,
+              mode: "index",
+            },
+          },
         });
       };
 
@@ -251,9 +663,44 @@
           type: "line",
           data: {
             labels,
-            datasets: [{ label: "Visits per hour (UTC)", data }],
+            datasets: [
+              {
+                label: "Visits per hour (UTC)",
+                data,
+                backgroundColor: "#3b82f6",
+                borderColor: "#2563eb",
+                borderWidth: 2,
+                pointBackgroundColor: "#3b82f6",
+                pointBorderColor: "#2563eb",
+                pointHoverBackgroundColor: "#10b981",
+                pointHoverBorderColor: "#059669",
+                pointHoverBorderWidth: 3,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+              },
+            ],
           },
-          options: { responsive: true, maintainAspectRatio: false },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  precision: 0,
+                },
+              },
+            },
+            plugins: {
+              legend: {
+                display: true,
+              },
+            },
+            interaction: {
+              intersect: false,
+              mode: "index",
+            },
+          },
         });
       };
 
@@ -261,11 +708,19 @@
       const loadStats = async () => {
         loadBtn.disabled = true;
         tipEl.textContent = "Loading…";
+        hideError();
 
         const app = appEl.value;
         const key = apiKeyEl.value || undefined;
         const from = fromEl.value;
         const to = toEl.value;
+
+        // Validate inputs
+        if (!app) {
+          showError("Please select an app.");
+          loadBtn.disabled = false;
+          return;
+        }
 
         let url = `${CONFIG.baseUrl}/${encodeURIComponent(app)}/stats`;
         if (from && to) url += `?from=${from}&to=${to}`;
@@ -280,13 +735,35 @@
             (a, d) => a + (d.totalVisits || 0),
             0
           );
+          const totalDurationMs = days.reduce(
+            (a, d) => a + (d.totalDurationMs || 0),
+            0
+          );
           const avgDur = Math.round(
             days.reduce((a, d) => a + (d.avgDurationMs || 0), 0) /
               (days.length || 1)
           );
+
+          // Today and month calculations
+          const today = new Date().toISOString().slice(0, 10);
+          const todayData = days.find((d) => d.day === today);
+          const todayVisits = todayData ? todayData.totalVisits : 0;
+
+          // Calculate month visits (current month)
+          const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+          const monthDays = days.filter((d) => d.day.startsWith(currentMonth));
+          const monthVisits = monthDays.reduce(
+            (a, d) => a + (d.totalVisits || 0),
+            0
+          );
+
+          // Update display
           totalEl.textContent = totalVisits;
           avgEl.textContent = fmtMs(avgDur);
           daysEl.textContent = days.length;
+          todayEl.textContent = todayVisits;
+          monthEl.textContent = monthVisits;
+          totalDurEl.textContent = fmtMs(totalDurationMs);
 
           // charts
           buildDaily(days);
@@ -312,9 +789,13 @@
               ? `Showing ${from} → ${to} (UTC)`
               : `Showing today (UTC)`;
         } catch (e) {
-          tipEl.textContent = `Error: ${e.message}`;
+          showError(e.message);
           rawEl.textContent = e.stack || String(e);
           totalEl.textContent = avgEl.textContent = daysEl.textContent = "—";
+          todayEl.textContent =
+            monthEl.textContent =
+            totalDurEl.textContent =
+              "—";
           if (dailyChart) dailyChart.destroy();
           if (hourChart) hourChart.destroy();
         } finally {
@@ -324,6 +805,9 @@
 
       /** init */
       (async () => {
+        // Load API keys from database first
+        await loadApiKeys();
+
         // default range: last 7 days
         const today = new Date();
         const endISO = today.toISOString().slice(0, 10);
@@ -336,6 +820,10 @@
         await setAppsUI();
         loadBtn.onclick = loadStats;
         await loadStats();
+        await loadRealtimeStatus();
+
+        // Auto-refresh real-time status every 10 seconds
+        setInterval(loadRealtimeStatus, 10000);
       })();
     </script>
   </body>

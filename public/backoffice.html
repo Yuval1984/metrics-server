@@ -58,6 +58,9 @@
         color: #fff;
         border: 0;
         cursor: pointer;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s ease;
       }
       button.ghost {
         background: #fff;
@@ -67,6 +70,68 @@
       button:disabled {
         opacity: 0.6;
         cursor: not-allowed;
+      }
+
+      /* Button Colors */
+      button.start-btn {
+        background: #10b981;
+      }
+      button.start-btn:hover {
+        background: #059669;
+      }
+
+      button.heartbeat-btn {
+        background: #3b82f6;
+      }
+      button.heartbeat-btn:hover {
+        background: #2563eb;
+      }
+
+      button.end-btn {
+        background: #f59e0b;
+      }
+      button.end-btn:hover {
+        background: #d97706;
+      }
+
+      button.quick-btn {
+        background: #8b5cf6;
+      }
+      button.quick-btn:hover {
+        background: #7c3aed;
+      }
+
+      button.delete-btn {
+        background: #ef4444;
+      }
+      button.delete-btn:hover {
+        background: #dc2626;
+      }
+
+      /* Active session indicator */
+      .active-session {
+        color: #10b981 !important;
+        font-weight: 600;
+        font-family: monospace;
+      }
+
+      /* Ripple Effect */
+      button::before {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 0;
+        height: 0;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.3);
+        transform: translate(-50%, -50%);
+        transition: width 0.6s, height 0.6s;
+      }
+
+      button:hover::before {
+        width: 300px;
+        height: 300px;
       }
       input[type="date"] {
         padding: 7px 8px;
@@ -113,20 +178,154 @@
     </style>
   </head>
   <body>
-    <h1>Metrics Backoffice</h1>
+    <div
+      style="
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+      "
+    >
+      <h1 style="margin: 0">Metrics Backoffice</h1>
+      <button
+        onclick="window.location.href='dashboard.html'"
+        style="
+          padding: 8px 16px;
+          background: #111827;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+          font-size: 14px;
+        "
+      >
+        📈 Dashboard
+      </button>
+    </div>
 
     <div class="card">
       <div class="row">
         <div>
           <div class="pill">Base URL <code id="baseUrlLabel"></code></div>
-          <div class="muted" style="margin-top: 6px">
-            This page calls your API directly. Make sure CORS allows this
-            origin.
-          </div>
         </div>
         <div style="text-align: right">
           <button class="ghost" id="refreshApps">↻ Refresh Apps</button>
         </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <table style="width: 100%; border-collapse: collapse">
+        <thead>
+          <tr>
+            <th
+              style="
+                padding: 10px;
+                border-bottom: 1px solid var(--b);
+                text-align: left;
+                font-size: 12px;
+                color: var(--muted);
+              "
+            >
+              App
+            </th>
+            <th
+              style="
+                padding: 10px;
+                border-bottom: 1px solid var(--b);
+                text-align: left;
+                font-size: 12px;
+                color: var(--muted);
+                width: 220px;
+              "
+            >
+              API Key (x-api-key)
+            </th>
+            <th
+              style="
+                padding: 10px;
+                border-bottom: 1px solid var(--b);
+                text-align: left;
+                font-size: 12px;
+                color: var(--muted);
+              "
+            >
+              Action
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td
+              style="
+                padding: 10px;
+                border-bottom: 1px solid var(--b);
+                vertical-align: middle;
+                width: 45%;
+              "
+            >
+              <input
+                type="text"
+                id="newAppName"
+                placeholder="e.g., myapp"
+                style="
+                  width: 100%;
+                  border: 1px solid var(--b);
+                  border-radius: 8px;
+                  font-size: 14px;
+                "
+              />
+            </td>
+            <td
+              style="
+                padding: 10px;
+                border-bottom: 1px solid var(--b);
+                vertical-align: middle;
+                width: 45%;
+              "
+            >
+              <input
+                type="text"
+                id="newAppKey"
+                placeholder="e.g., mykey123"
+                style="
+                  width: 100%;
+                  border: 1px solid var(--b);
+                  border-radius: 8px;
+                  font-size: 14px;
+                  margin-left: 10px;
+                "
+              />
+            </td>
+            <td
+              style="
+                border-bottom: 1px solid var(--b);
+                vertical-align: middle;
+                text-align: center;
+              "
+            >
+              <button
+                id="addAppBtn"
+                style="
+                  padding: 8px 16px;
+                  background: #10b981;
+                  color: white;
+                  border: none;
+                  border-radius: 8px;
+                  cursor: pointer;
+                  font-size: 14px;
+                  font-weight: 600;
+                "
+              >
+                ➕ Add App
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="muted" style="margin-top: 8px">
+        Add a new app to start tracking metrics. The app will appear in the
+        table below.
       </div>
     </div>
 
@@ -185,6 +384,183 @@
         logEl.scrollTop = logEl.scrollHeight;
       }
 
+      // Custom confirmation dialog
+      function showConfirmDialog(title, message, confirmText, cancelText) {
+        console.log("showConfirmDialog called with:", {
+          title,
+          message,
+          confirmText,
+          cancelText,
+        });
+        return new Promise((resolve) => {
+          // Create overlay
+          const overlay = document.createElement("div");
+          overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+          `;
+
+          // Create dialog
+          const dialog = document.createElement("div");
+          dialog.style.cssText = `
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+          `;
+
+          // Title
+          const titleEl = document.createElement("h3");
+          titleEl.textContent = title;
+          titleEl.style.cssText = `
+            margin: 0 0 12px 0;
+            font-size: 18px;
+            font-weight: 600;
+            color: #111827;
+          `;
+
+          // Message
+          const messageEl = document.createElement("p");
+          messageEl.textContent = message;
+          messageEl.style.cssText = `
+            margin: 0 0 20px 0;
+            font-size: 14px;
+            color: #6b7280;
+            line-height: 1.5;
+          `;
+
+          // Buttons container
+          const buttonsContainer = document.createElement("div");
+          buttonsContainer.style.cssText = `
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+          `;
+
+          // Cancel button
+          const cancelBtn = document.createElement("button");
+          cancelBtn.textContent = cancelText;
+          cancelBtn.style.cssText = `
+            padding: 8px 16px;
+            background: #f3f4f6;
+            color: #374151;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+          `;
+          cancelBtn.onclick = () => {
+            document.body.removeChild(overlay);
+            resolve(false);
+          };
+
+          // Confirm button
+          const confirmBtn = document.createElement("button");
+          confirmBtn.textContent = confirmText;
+          confirmBtn.style.cssText = `
+            padding: 8px 16px;
+            background: #dc2626;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+          `;
+          confirmBtn.onclick = () => {
+            document.body.removeChild(overlay);
+            resolve(true);
+          };
+
+          // Assemble dialog
+          buttonsContainer.appendChild(cancelBtn);
+          buttonsContainer.appendChild(confirmBtn);
+          dialog.appendChild(titleEl);
+          dialog.appendChild(messageEl);
+          dialog.appendChild(buttonsContainer);
+          overlay.appendChild(dialog);
+
+          // Add to page
+          document.body.appendChild(overlay);
+
+          // Close on overlay click
+          overlay.onclick = (e) => {
+            if (e.target === overlay) {
+              document.body.removeChild(overlay);
+              resolve(false);
+            }
+          };
+        });
+      }
+
+      // Location detection function (IP-based geolocation)
+      const getLocationFromIP = async () => {
+        try {
+          const response = await fetch("https://ipapi.co/json/");
+          const data = await response.json();
+          return {
+            country: data.country_name || "Unknown",
+            city: data.city || "Unknown",
+          };
+        } catch (error) {
+          console.log("Location detection failed:", error);
+          return { country: "Unknown", city: "Unknown" };
+        }
+      };
+
+      // Device type detection function (from User-Agent)
+      const detectDeviceType = (userAgent) => {
+        if (!userAgent) return "unknown";
+        const ua = userAgent.toLowerCase();
+        if (
+          ua.includes("mobile") ||
+          ua.includes("android") ||
+          ua.includes("iphone")
+        ) {
+          return "mobile";
+        }
+        if (ua.includes("tablet") || ua.includes("ipad")) {
+          return "tablet";
+        }
+        return "desktop";
+      };
+
+      // Session persistence functions
+      const saveActiveSessions = () => {
+        const sessions = {};
+        sessionByApp.forEach((sessionId, app) => {
+          sessions[app] = sessionId;
+        });
+        localStorage.setItem("activeSessions", JSON.stringify(sessions));
+      };
+
+      const loadActiveSessions = () => {
+        try {
+          const saved = localStorage.getItem("activeSessions");
+          if (saved) {
+            const sessions = JSON.parse(saved);
+            Object.entries(sessions).forEach(([app, sessionId]) => {
+              sessionByApp.set(app, sessionId);
+            });
+            return sessions;
+          }
+        } catch (error) {
+          console.log("Failed to load saved sessions:", error);
+        }
+        return {};
+      };
+
       async function http(method, url, key, body) {
         const headers = {};
         if (key) headers["x-api-key"] = key;
@@ -203,26 +579,42 @@
         return res.text();
       }
 
-      async function getApps(keyForList) {
-        // try /v1/apps (if you added it). If unauthorized, pass the first known key.
+      async function getApps() {
+        // Fetch apps from database (no authentication required)
         try {
-          return (
-            (
-              await http(
-                "GET",
-                CONFIG.baseUrl.replace(/\/v1$/, "/v1/apps"),
-                keyForList
-              )
-            ).apps || []
-          );
+          const response = await http("GET", `${CONFIG.baseUrl}/apps`);
+          return response.apps || [];
         } catch {
           return CONFIG.fallbackApps;
+        }
+      }
+
+      async function getApiKeys() {
+        // Fetch API keys from database (no authentication required)
+        try {
+          const response = await http("GET", `${CONFIG.baseUrl}/api-keys`);
+          return response.apiKeys || {};
+        } catch {
+          return CONFIG.appKeys; // Fallback to hardcoded keys
         }
       }
 
       /** ===== State ===== */
       const sessionByApp = new Map(); // app -> sessionId
       const keyByApp = new Map(); // app -> key (from input)
+
+      // Auto-save sessions when they change
+      const originalSet = sessionByApp.set.bind(sessionByApp);
+      sessionByApp.set = (key, value) => {
+        originalSet(key, value);
+        saveActiveSessions();
+      };
+
+      const originalDelete = sessionByApp.delete.bind(sessionByApp);
+      sessionByApp.delete = (key) => {
+        originalDelete(key);
+        saveActiveSessions();
+      };
 
       /** ===== UI ===== */
       function appRow(app) {
@@ -239,7 +631,18 @@
         keyInput.placeholder = "x-api-key";
         keyInput.value = CONFIG.appKeys[app] || "";
         keyByApp.set(app, keyInput.value || "");
-        keyInput.oninput = () => keyByApp.set(app, keyInput.value);
+        keyInput.oninput = () => {
+          keyByApp.set(app, keyInput.value);
+          // Update Delete App button visibility when API key changes
+          const hasApiKey = keyInput.value.trim();
+          if (hasApiKey) {
+            btnDelApp.style.opacity = "1";
+            btnDelApp.style.visibility = "visible";
+          } else {
+            btnDelApp.style.opacity = "0";
+            btnDelApp.style.visibility = "hidden";
+          }
+        };
         tdKey.appendChild(keyInput);
         tr.appendChild(tdKey);
 
@@ -247,7 +650,16 @@
         const tdSess = document.createElement("td");
         const sessIdSpan = document.createElement("span");
         sessIdSpan.className = "muted";
-        sessIdSpan.textContent = "—";
+
+        // Restore saved session ID if exists
+        const savedSessionId = sessionByApp.get(app);
+        if (savedSessionId) {
+          sessIdSpan.textContent = savedSessionId;
+          sessIdSpan.className = "active-session";
+        } else {
+          sessIdSpan.textContent = "—";
+        }
+
         tdSess.appendChild(sessIdSpan);
         tr.appendChild(tdSess);
 
@@ -256,18 +668,45 @@
         const btnStart = mkBtn("Start", async () => {
           try {
             const key = keyByApp.get(app) || undefined;
+
+            // Check if there's already an active session
+            const existingSessionId = sessionByApp.get(app);
+            if (existingSessionId) {
+              logLine(
+                `[${app}] Session already active: ${existingSessionId}. Use End to stop it first.`,
+                false
+              );
+              return;
+            }
+
+            // Get location and device type data
+            const location = await getLocationFromIP();
+            const deviceType = detectDeviceType(navigator.userAgent);
+
+            logLine(
+              `[${app}] Starting session with location: ${location.city}, ${location.country}`
+            );
+            logLine(`[${app}] Device type: ${deviceType}`);
+
             const data = await http(
               "POST",
               `${CONFIG.baseUrl}/${app}/start`,
-              key
+              key,
+              {
+                country: location.country,
+                city: location.city,
+                deviceType: deviceType,
+              }
             );
             sessionByApp.set(app, data.sessionId);
             sessIdSpan.textContent = data.sessionId;
+            sessIdSpan.className = "active-session";
             logLine(`[${app}] start → ${data.sessionId}`);
           } catch (e) {
             logLine(`[${app}] start failed: ${e.message}`, false);
           }
         });
+        btnStart.classList.add("start-btn");
         const btnHb = mkBtn("Heartbeat", async () => {
           const sid = sessionByApp.get(app);
           if (!sid)
@@ -282,6 +721,7 @@
             logLine(`[${app}] heartbeat failed: ${e.message}`, false);
           }
         });
+        btnHb.classList.add("heartbeat-btn");
         const btnEnd = mkBtn("End", async () => {
           const sid = sessionByApp.get(app);
           if (!sid)
@@ -294,10 +734,12 @@
             logLine(`[${app}] end → ${sid}`);
             sessionByApp.delete(app);
             sessIdSpan.textContent = "—";
+            sessIdSpan.className = "muted";
           } catch (e) {
             logLine(`[${app}] end failed: ${e.message}`, false);
           }
         });
+        btnEnd.classList.add("end-btn");
         const btnQuick = mkBtn("Quick Visit (3s)", async () => {
           try {
             const key = keyByApp.get(app) || undefined;
@@ -326,6 +768,7 @@
             logLine(`[${app}] quick visit failed: ${e.message}`, false);
           }
         });
+        btnQuick.classList.add("quick-btn");
 
         tdSim.append(
           btnStart,
@@ -359,12 +802,13 @@
             logLine(`[${app}] delete day failed: ${e.message}`, false);
           }
         });
+        btnDelDay.classList.add("delete-btn");
         tdDelDay.append(dayInput, space(), btnDelDay);
         tr.appendChild(tdDelDay);
 
         // Delete all
         const tdDelAll = document.createElement("td");
-        const btnDelAll = mkBtn("Delete ALL", async () => {
+        const btnDelAll = mkBtn("Delete all data", async () => {
           const key = keyByApp.get(app) || undefined;
           if (!key) return logLine(`[${app}] reset requires API key`, false);
           if (!confirm(`Delete ALL data for "${app}"?`)) return;
@@ -375,7 +819,84 @@
             logLine(`[${app}] delete all failed: ${e.message}`, false);
           }
         });
-        tdDelAll.append(btnDelAll);
+        btnDelAll.classList.add("delete-btn");
+
+        // Delete App button (hidden by default, shown on row hover)
+        const btnDelApp = document.createElement("button");
+        btnDelApp.textContent = "Delete App";
+        btnDelApp.onclick = async () => {
+          try {
+            // Find the API key input for this specific app
+            const appRow = btnDelApp.closest("tr");
+            const keyInput = appRow.querySelector(
+              'input[placeholder="x-api-key"]'
+            );
+            const key = keyInput ? keyInput.value.trim() : undefined;
+
+            if (!key) {
+              logLine(`[${app}] delete app requires API key`, false);
+              return;
+            }
+
+            const confirmed = confirm(
+              `Are you sure you want to delete the entire app "${app}" and ALL its data? This action cannot be undone!`
+            );
+
+            if (!confirmed) {
+              logLine(`[${app}] Delete cancelled`);
+              return;
+            }
+
+            logLine(`[${app}] Proceeding with deletion...`);
+
+            // Delete all data first
+            await http("DELETE", `${CONFIG.baseUrl}/${app}/reset`, key);
+            logLine(`[${app}] deleted app and all data`);
+            // Refresh the table to remove the app
+            await renderTable();
+          } catch (e) {
+            console.error("Error in Delete App:", e);
+            logLine(`[${app}] Error deleting app: ${e.message}`, false);
+          }
+        };
+        btnDelApp.style.cssText = `
+          padding: 8px 16px;
+          background: #000000;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 600;
+          margin-left: 8px;
+          opacity: 0;
+          visibility: hidden;
+          transition: opacity 0.2s ease, visibility 0.2s ease;
+        `;
+
+        // Container for both buttons
+        const buttonContainer = document.createElement("div");
+        buttonContainer.style.display = "flex";
+        buttonContainer.style.alignItems = "center";
+        buttonContainer.appendChild(btnDelAll);
+        buttonContainer.appendChild(btnDelApp);
+
+        // Show/hide Delete App button on row hover
+        tr.addEventListener("mouseenter", () => {
+          // Only show Delete App button if there's an API key
+          const keyInput = tr.querySelector('input[placeholder="x-api-key"]');
+          const hasApiKey = keyInput && keyInput.value.trim();
+          if (hasApiKey) {
+            btnDelApp.style.opacity = "1";
+            btnDelApp.style.visibility = "visible";
+          }
+        });
+        tr.addEventListener("mouseleave", () => {
+          btnDelApp.style.opacity = "0";
+          btnDelApp.style.visibility = "hidden";
+        });
+
+        tdDelAll.append(buttonContainer);
         tr.appendChild(tdDelAll);
 
         return tr;
@@ -405,15 +926,80 @@
       async function renderTable() {
         const appsBody = document.getElementById("appsBody");
         appsBody.innerHTML = "";
-        // try to fetch apps using the first known key if any
-        const firstKnownKey = Object.values(CONFIG.appKeys)[0] || undefined;
-        const apps = await getApps(firstKnownKey);
+        // Fetch apps and API keys from database (no key required)
+        const [apps, apiKeys] = await Promise.all([getApps(), getApiKeys()]);
+
+        // Update CONFIG.appKeys with database values
+        CONFIG.appKeys = { ...CONFIG.appKeys, ...apiKeys };
+
         for (const app of apps) {
           appsBody.appendChild(appRow(app));
         }
       }
 
       document.getElementById("refreshApps").onclick = renderTable;
+
+      // Add new app functionality
+      document.getElementById("addAppBtn").onclick = async () => {
+        const appName = document.getElementById("newAppName").value.trim();
+        const appKey = document.getElementById("newAppKey").value.trim();
+
+        if (!appName) {
+          logLine("Please enter an app name", false);
+          return;
+        }
+
+        if (!appKey) {
+          logLine("Please enter an API key", false);
+          return;
+        }
+
+        // Check if app already exists
+        const existingApps = await getApps();
+        if (existingApps.includes(appName)) {
+          logLine(`App "${appName}" already exists`, false);
+          return;
+        }
+
+        try {
+          // Add to CONFIG.appKeys for immediate use
+          CONFIG.appKeys[appName] = appKey;
+
+          // Test the app by trying to start a session (this will create the app in the database)
+          logLine(`Adding app "${appName}"...`);
+
+          // Create a test session to register the app in the database
+          const testData = await http(
+            "POST",
+            `${CONFIG.baseUrl}/${appName}/start`,
+            appKey,
+            {
+              country: "Test",
+              city: "Test",
+              deviceType: "desktop",
+            }
+          );
+
+          // Immediately end the test session
+          await http("POST", `${CONFIG.baseUrl}/${appName}/end`, appKey, {
+            sessionId: testData.sessionId,
+          });
+
+          logLine(`✅ App "${appName}" added successfully!`);
+
+          // Clear the form
+          document.getElementById("newAppName").value = "";
+          document.getElementById("newAppKey").value = "";
+
+          // Refresh the table to show the new app
+          await renderTable();
+        } catch (error) {
+          logLine(`Failed to add app "${appName}": ${error.message}`, false);
+        }
+      };
+
+      // Initialize saved sessions on page load
+      loadActiveSessions();
 
       // init
       renderTable();
