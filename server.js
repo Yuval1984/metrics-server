@@ -14,7 +14,7 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-app.use(cors({ origin: [/localhost:4200$/, /repairman\.co\.il$/] }));
+app.use(cors({ origin: [/localhost:4200$/, /repairman\.co\.il$/, /yuval1984\.github\.io$/] }));
 app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/", (_req, res) => res.send(`
