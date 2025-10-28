@@ -10,10 +10,25 @@
         --bg: #f9fafb;
         --fg: #111827;
         --muted: #6b7280;
+        --card-bg: #ffffff;
+        --input-b: #d1d5db;
+        --btn-bg: #111827;
+        --btn-fg: #ffffff;
+      }
+      [data-theme="dark"] {
+        --b: #1f2a44;
+        --bg: #0b1020;
+        --fg: #e5e7eb;
+        --muted: #94a3b8;
+        --card-bg: #0f172a;
+        --input-b: #334155;
+        --btn-bg: #2563eb;
+        --btn-fg: #ffffff;
       }
       body {
         font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
         margin: 16px;
+        background: var(--bg);
         color: var(--fg);
       }
       h1 {
@@ -24,7 +39,7 @@
         border: 1px solid var(--b);
         border-radius: 12px;
         padding: 14px;
-        background: #fff;
+        background: var(--card-bg);
         margin-bottom: 16px;
       }
       .muted {
@@ -49,13 +64,15 @@
       input,
       button {
         padding: 8px 10px;
-        border: 1px solid var(--b);
+        border: 1px solid var(--input-b);
         border-radius: 8px;
         font-size: 14px;
+        background: var(--card-bg);
+        color: var(--fg);
       }
       button {
-        background: #111827;
-        color: #fff;
+        background: var(--btn-bg);
+        color: var(--btn-fg);
         border: 0;
         cursor: pointer;
         position: relative;
@@ -187,20 +204,33 @@
       "
     >
       <h1 style="margin: 0">Metrics Backoffice</h1>
-      <button
-        onclick="window.location.href='dashboard.html'"
-        style="
-          padding: 8px 16px;
-          background: #111827;
-          color: white;
-          border: none;
-          border-radius: 8px;
-          cursor: pointer;
-          font-size: 14px;
-        "
-      >
-        📈 Dashboard
-      </button>
+      <div style="display: flex; align-items: center; gap: 12px">
+        <label
+          style="
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--muted);
+          "
+        >
+          <input id="themeToggle" type="checkbox" /> Dark mode
+        </label>
+        <button
+          onclick="window.location.href='dashboard.html'"
+          style="
+            padding: 8px 16px;
+            background: #111827;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+          "
+        >
+          📈 Dashboard
+        </button>
+      </div>
     </div>
 
     <div class="card">
@@ -938,6 +968,22 @@
       }
 
       document.getElementById("refreshApps").onclick = renderTable;
+
+      // Theme initialization
+      const savedTheme = localStorage.getItem("metrics_theme");
+      if (savedTheme === "dark") {
+        document.documentElement.setAttribute("data-theme", "dark");
+        document.getElementById("themeToggle").checked = true;
+      }
+      document.getElementById("themeToggle").addEventListener("change", (e) => {
+        if (e.target.checked) {
+          document.documentElement.setAttribute("data-theme", "dark");
+          localStorage.setItem("metrics_theme", "dark");
+        } else {
+          document.documentElement.removeAttribute("data-theme");
+          localStorage.setItem("metrics_theme", "light");
+        }
+      });
 
       // Add new app functionality
       document.getElementById("addAppBtn").onclick = async () => {

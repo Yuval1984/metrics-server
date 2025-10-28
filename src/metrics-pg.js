@@ -338,11 +338,13 @@ router.get("/:app/analytics", requireKey, async (req, res) => {
   let params = [app];
   
   if (from && to) {
-    dateFilter = `AND ((started_at AT TIME ZONE 'UTC')::date BETWEEN $2::date AND $3::date)`;
+    // Use last_seen_at so sessions active during the window are counted,
+    // even if they started before the window
+    dateFilter = `AND ((last_seen_at AT TIME ZONE 'UTC')::date BETWEEN $2::date AND $3::date)`;
     params.push(from, to);
   } else {
     const today = new Date().toISOString().slice(0, 10);
-    dateFilter = `AND ((started_at AT TIME ZONE 'UTC')::date = $2::date)`;
+    dateFilter = `AND ((last_seen_at AT TIME ZONE 'UTC')::date = $2::date)`;
     params.push(today);
   }
   

@@ -5,9 +5,35 @@
     <title>Metrics Dashboard</title>
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <style>
+      :root {
+        --bg: #ffffff;
+        --fg: #111827;
+        --muted-fg: #6b7280;
+        --card-bg: #ffffff;
+        --card-b: #e5e7eb;
+        --input-b: #d1d5db;
+        --stat-bg: #f9fafb;
+        --code-bg: #f3f4f6;
+        --btn-bg: #111827;
+        --btn-fg: #ffffff;
+      }
+      [data-theme="dark"] {
+        --bg: #0b1020;
+        --fg: #e5e7eb;
+        --muted-fg: #94a3b8;
+        --card-bg: #0f172a;
+        --card-b: #1f2a44;
+        --input-b: #334155;
+        --stat-bg: #0f172a;
+        --code-bg: #0b1222;
+        --btn-bg: #2563eb;
+        --btn-fg: #ffffff;
+      }
       body {
         font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
         margin: 16px;
+        background: var(--bg);
+        color: var(--fg);
       }
       h1 {
         font-size: 20px;
@@ -20,13 +46,14 @@
         margin-bottom: 16px;
       }
       .card {
-        border: 1px solid #e5e7eb;
+        border: 1px solid var(--card-b);
+        background: var(--card-bg);
         border-radius: 12px;
         padding: 16px 18px;
       }
       label {
         font-size: 12px;
-        color: #374151;
+        color: var(--muted-fg);
         display: block;
         margin-bottom: 6px;
         font-weight: 500;
@@ -34,20 +61,41 @@
       select,
       input {
         padding: 8px;
-        border: 1px solid #d1d5db;
+        border: 1px solid var(--input-b);
         border-radius: 8px;
         width: 100%;
         box-sizing: border-box;
         font-size: 14px;
+        background: var(--card-bg);
+        color: var(--fg);
       }
       button {
         padding: 10px 14px;
         border: 0;
         border-radius: 10px;
-        background: #111827;
-        color: white;
+        background: var(--btn-bg);
+        color: var(--btn-fg);
         cursor: pointer;
       }
+      /* Toggle */
+      .toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--muted-fg);
+        user-select: none;
+        margin-right: 16px; /* ensures spacing from Backoffice button */
+      }
+      .toggle input {
+        appearance: auto;
+        -webkit-appearance: checkbox;
+        position: static;
+        width: auto;
+        height: auto;
+        vertical-align: middle;
+      }
+      /* remove old slider styles */
       button:disabled {
         opacity: 0.5;
         cursor: not-allowed;
@@ -58,7 +106,7 @@
         gap: 12px;
       }
       .stat {
-        background: #f9fafb;
+        background: var(--stat-bg);
         border-radius: 10px;
         padding: 16px;
         text-align: center;
@@ -72,7 +120,7 @@
       .stat .muted {
         font-size: 16px;
         font-weight: 600;
-        color: #374151;
+        color: var(--muted-fg);
         position: absolute;
         top: 16px;
         left: 50%;
@@ -104,18 +152,18 @@
       }
       pre {
         white-space: pre-wrap;
-        background: #f3f4f6;
+        background: var(--code-bg);
         padding: 10px;
         border-radius: 8px;
       }
       .muted {
-        color: #6b7280;
+        color: var(--muted-fg);
         font-size: 12px;
       }
       canvas {
-        max-height: 180px;
+        max-height: 260px;
         width: 100% !important;
-        height: 180px !important;
+        height: 260px !important;
       }
       .form-group {
         margin-bottom: 16px;
@@ -158,20 +206,28 @@
       "
     >
       <h1 style="margin: 0">Metrics Dashboard</h1>
-      <button
-        onclick="window.location.href='backoffice.html'"
-        style="
-          padding: 8px 16px;
-          background: #6b7280;
-          color: white;
-          border: none;
-          border-radius: 8px;
-          cursor: pointer;
-          font-size: 14px;
-        "
-      >
-        📊 Backoffice
-      </button>
+      <div style="display: flex; align-items: center; gap: 12px">
+        <div class="toggle" title="Toggle dark mode">
+          <label style="display: flex; align-items: center; gap: 8px">
+            <input id="themeToggle" type="checkbox" />
+            <span>Dark mode</span>
+          </label>
+        </div>
+        <button
+          onclick="window.location.href='backoffice.html'"
+          style="
+            padding: 8px 16px;
+            background: #6b7280;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+          "
+        >
+          📊 Backoffice
+        </button>
+      </div>
     </div>
 
     <div class="row">
@@ -274,8 +330,21 @@
       </div>
     </div>
 
-    <div class="card">
-      <canvas id="dailyChart" height="180"></canvas>
+    <div class="card" id="analyticsCard">
+      <div class="row" style="grid-template-columns: 1fr 1fr 0.7fr">
+        <div id="dailyCard">
+          <label>Visits vs Avg duration</label>
+          <canvas id="dailyChart" height="180"></canvas>
+        </div>
+        <div>
+          <label>Device types</label>
+          <canvas id="deviceChart" height="260"></canvas>
+        </div>
+        <div>
+          <label>Top countries</label>
+          <canvas id="countryChart" height="260"></canvas>
+        </div>
+      </div>
     </div>
 
     <div class="card">
@@ -333,7 +402,19 @@
       const realtimeStatusEl = document.getElementById("realtimeStatus");
       const refreshStatusBtn = document.getElementById("refreshStatus");
 
-      let dailyChart, hourChart;
+      let dailyChart, hourChart, deviceChart, countryChart;
+      const PALETTE = [
+        "#60a5fa",
+        "#f472b6",
+        "#34d399",
+        "#f59e0b",
+        "#a78bfa",
+        "#fca5a5",
+        "#22d3ee",
+        "#c084fc",
+        "#fb923c",
+        "#86efac",
+      ];
 
       /** ====== helpers ====== */
       const fmtMs = (ms) => {
@@ -529,6 +610,9 @@
             </div>
           `;
 
+          // expose latest sessions for analytics fallback and immediate charts
+          window.lastStatusSessions = data.sessions || [];
+
           realtimeStatusEl.innerHTML = `
             <div style="margin-bottom: 12px;">
               <span style="font-size: 14px; font-weight: 600;">${
@@ -537,6 +621,32 @@
             </div>
             ${sessionsHtml}
           `;
+
+          // Also refresh bottom analytics from live sessions for consistency
+          try {
+            const sessions = window.lastStatusSessions;
+            const byType = new Map();
+            const byCountry = new Map();
+            sessions.forEach((s) => {
+              const t = String(s.deviceType || s.device_type || "unknown")
+                .trim()
+                .toLowerCase();
+              const c = String(s.country || "unknown").trim();
+              byType.set(t, (byType.get(t) || 0) + 1);
+              byCountry.set(c, (byCountry.get(c) || 0) + 1);
+            });
+            const typeCounts = Array.from(byType.entries()).map(
+              ([device_type, count]) => ({
+                device_type,
+                unique_sessions: count,
+              })
+            );
+            const countryCounts = Array.from(byCountry.entries()).map(
+              ([country, count]) => ({ country, visits: count })
+            );
+            if (typeCounts.length) buildDeviceChart(typeCounts);
+            if (countryCounts.length) buildCountryChart(countryCounts);
+          } catch {}
         } catch (e) {
           // Handle specific error cases
           if (e.message.includes("API key required")) {
@@ -598,6 +708,15 @@
         const totals = days.map((d) => d.totalVisits);
         const avg = days.map((d) => Math.round(d.avgDurationMs / 1000)); // in seconds for readability
 
+        const dailyCard = document.getElementById("dailyCard");
+        const hasAny = totals.some((v) => v > 0) || avg.some((v) => v > 0);
+        if (!hasAny) {
+          dailyCard.style.display = "none";
+          if (dailyChart) dailyChart.destroy();
+          return;
+        } else {
+          dailyCard.style.display = "block";
+        }
         if (dailyChart) dailyChart.destroy();
         const ctx = document.getElementById("dailyChart").getContext("2d");
         dailyChart = new Chart(ctx, {
@@ -608,8 +727,10 @@
               {
                 label: "Visits",
                 data: totals,
-                backgroundColor: "#e5e7eb",
-                borderColor: "#d1d5db",
+                backgroundColor: totals.map(
+                  (_, i) => PALETTE[i % PALETTE.length]
+                ),
+                borderColor: totals.map((_, i) => PALETTE[i % PALETTE.length]),
                 borderWidth: 1,
                 hoverBackgroundColor: "#3b82f6",
                 hoverBorderColor: "#2563eb",
@@ -618,8 +739,12 @@
               {
                 label: "Avg duration (sec)",
                 data: avg,
-                backgroundColor: "#9ca3af",
-                borderColor: "#6b7280",
+                backgroundColor: avg.map(
+                  (_, i) => PALETTE[(i + 3) % PALETTE.length] + "88"
+                ),
+                borderColor: avg.map(
+                  (_, i) => PALETTE[(i + 3) % PALETTE.length]
+                ),
                 borderWidth: 1,
                 hoverBackgroundColor: "#10b981",
                 hoverBorderColor: "#059669",
@@ -647,6 +772,105 @@
               intersect: false,
               mode: "index",
             },
+          },
+        });
+      };
+
+      const buildDeviceChart = (counts) => {
+        if (deviceChart) deviceChart.destroy();
+        const ctx = document.getElementById("deviceChart").getContext("2d");
+        let labels;
+        let data;
+
+        // Prefer live sessions when available for accurate current breakdown
+        if (
+          Array.isArray(window.lastStatusSessions) &&
+          window.lastStatusSessions.length > 0
+        ) {
+          const byType = new Map();
+          window.lastStatusSessions.forEach((s) => {
+            const key = String(s.deviceType || s.device_type || "unknown")
+              .trim()
+              .toLowerCase();
+            byType.set(key, (byType.get(key) || 0) + 1);
+          });
+          labels = Array.from(byType.keys());
+          data = Array.from(byType.values());
+        } else {
+          labels = counts.map((r) => r.device_type || "unknown");
+          data = counts.map((r) =>
+            Number(r.unique_sessions || r.visits || r.count || 0)
+          );
+        }
+        deviceChart = new Chart(ctx, {
+          type: "pie",
+          data: {
+            labels,
+            datasets: [
+              {
+                data,
+                backgroundColor: labels.map(
+                  (_, i) => PALETTE[i % PALETTE.length]
+                ),
+                borderWidth: 1,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: true, position: "bottom" },
+              tooltip: {
+                callbacks: {
+                  label: (ctx) => {
+                    const val = ctx.parsed;
+                    const tot = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                    const pct = tot ? ((val / tot) * 100).toFixed(1) : 0;
+                    return `${ctx.label}: ${val} (${pct}%)`;
+                  },
+                },
+              },
+            },
+          },
+        });
+      };
+
+      const buildCountryChart = (counts) => {
+        if (countryChart) countryChart.destroy();
+        const ctx = document.getElementById("countryChart").getContext("2d");
+        const labels = counts.map((r) => r.country || "unknown");
+        const data = counts.map((r) => Number(r.visits || r.count || 0));
+        countryChart = new Chart(ctx, {
+          type: "bar",
+          data: {
+            labels,
+            datasets: [
+              {
+                label: "Visits",
+                data,
+                backgroundColor: labels.map(
+                  (_, i) =>
+                    [
+                      "#ef4444",
+                      "#f97316",
+                      "#eab308",
+                      "#22c55e",
+                      "#06b6d4",
+                      "#3b82f6",
+                      "#8b5cf6",
+                      "#ec4899",
+                    ][i % 8]
+                ),
+                borderWidth: 1,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: "top" } },
+            scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
           },
         });
       };
@@ -821,6 +1045,48 @@
         loadBtn.onclick = loadStats;
         await loadStats();
         await loadRealtimeStatus();
+
+        // Theme initialization
+        const savedTheme = localStorage.getItem("metrics_theme");
+        if (savedTheme === "dark") {
+          document.documentElement.setAttribute("data-theme", "dark");
+          document.getElementById("themeToggle").checked = true;
+        }
+        document
+          .getElementById("themeToggle")
+          .addEventListener("change", (e) => {
+            if (e.target.checked) {
+              document.documentElement.setAttribute("data-theme", "dark");
+              localStorage.setItem("metrics_theme", "dark");
+            } else {
+              document.documentElement.removeAttribute("data-theme");
+              localStorage.setItem("metrics_theme", "light");
+            }
+          });
+
+        // Load analytics for device/country charts
+        try {
+          const app = document.getElementById("app").value;
+          const key = document.getElementById("apiKey").value || undefined;
+          const an = await httpGet(
+            `${CONFIG.baseUrl}/${encodeURIComponent(app)}/analytics?from=${
+              fromEl.value
+            }&to=${toEl.value}`,
+            key
+          );
+          const hasDevices =
+            an && Array.isArray(an.devices) && an.devices.length > 0;
+          const hasCountries =
+            an && Array.isArray(an.countries) && an.countries.length > 0;
+          const analyticsCard = document.getElementById("analyticsCard");
+          if (!hasDevices && !hasCountries) {
+            analyticsCard.style.display = "none";
+          } else {
+            analyticsCard.style.display = "block";
+            if (hasDevices) buildDeviceChart(an.devices);
+            if (hasCountries) buildCountryChart(an.countries);
+          }
+        } catch {}
 
         // Auto-refresh real-time status every 10 seconds
         setInterval(loadRealtimeStatus, 10000);
