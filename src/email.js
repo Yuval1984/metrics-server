@@ -6,7 +6,7 @@ router.use(express.json());
 
 /**
  * POST /email/send
- * Send an email using Google SMTP
+ * Send an email using SMTP (defaults to Gmail)
  * 
  * Body:
  * {
@@ -16,9 +16,13 @@ router.use(express.json());
  *   "html": "<p>HTML body (optional if text is provided)</p>",
  *   "smtpConfig": {
  *     "user": "your-email@gmail.com",
- *     "password": "your-app-password"  // Gmail App Password or OAuth2 token
+ *     "password": "your-app-password",  // Gmail App Password (16 characters, no spaces)
+ *     "port": 465,  // Optional: 465 (SSL) or 587 (TLS). Defaults to 465, falls back to 587 if 465 fails
+ *     "host": "smtp.gmail.com"  // Optional: defaults to smtp.gmail.com
  *   }
  * }
+ * 
+ * Note: Automatically tries port 465 (SSL) first, then falls back to 587 (TLS) if connection fails.
  */
 router.post("/send", async (req, res) => {
   // Set response timeout to prevent hanging
@@ -60,23 +64,34 @@ router.post("/send", async (req, res) => {
 
     console.log(`Attempting to send email from ${smtpConfig.user} to ${to}`);
 
-    // Configure nodemailer transporter with Gmail SMTP
-    const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false, // true for 465, false for other ports
-      auth: {
-        user: smtpConfig.user,
-        pass: smtpConfig.password, // Gmail App Password or OAuth2 token
-      },
-      connectionTimeout: 10000, // 10 seconds to establish connection
-      greetingTimeout: 10000, // 10 seconds for SMTP greeting
-      socketTimeout: 10000, // 10 seconds for socket inactivity
-      debug: process.env.NODE_ENV === "development", // Enable debug logging in development
-    });
+    // Determine SMTP port - allow override in smtpConfig, default to 465 (SSL) first as it's more reliable
+    const port = smtpConfig.port || 465;
+    const secure = port === 465;
+    const host = smtpConfig.host || "smtp.gmail.com";
 
-    // Verify connection with timeout
-    console.log("Verifying SMTP connection...");
+    // Create transporter configuration
+    const createTransporter = (port, secure) => {
+      return nodemailer.createTransport({
+        host: host,
+        port: port,
+        secure: secure, // true for 465, false for other ports
+        auth: {
+          user: smtpConfig.user,
+          pass: smtpConfig.password, // Gmail App Password or OAuth2 token
+        },
+        connectionTimeout: 10000, // 10 seconds to establish connection
+        greetingTimeout: 10000, // 10 seconds for SMTP greeting
+        socketTimeout: 10000, // 10 seconds for socket inactivity
+        debug: process.env.NODE_ENV === "development", // Enable debug logging in development
+      });
+    };
+
+    let transporter = createTransporter(port, secure);
+    let lastError = null;
+
+    // Try to connect - if port 465 fails, try 587 as fallback (unless port is explicitly set)
+    console.log(`Attempting SMTP connection to ${host}:${port} (secure: ${secure})...`);
+    
     try {
       await Promise.race([
         transporter.verify(),
@@ -84,28 +99,54 @@ router.post("/send", async (req, res) => {
           setTimeout(() => reject(new Error("Connection timeout: SMTP verification took too long (15s)")), 15000)
         )
       ]);
-      console.log("SMTP connection verified successfully");
+      console.log(`SMTP connection verified successfully on port ${port}`);
     } catch (verifyError) {
-      console.error("SMTP verification failed:", verifyError.message, verifyError.code);
-      clearTimeout(responseTimeout);
+      console.error(`SMTP verification failed on port ${port}:`, verifyError.message, verifyError.code);
+      lastError = verifyError;
       
-      if (verifyError.code === "EAUTH") {
-        return res.status(401).json({
-          error: "Authentication failed",
-          message: "Invalid Gmail credentials. Please verify your App Password is correct (16 characters, no spaces).",
-          details: "Make sure you're using a Gmail App Password, not your regular password. Generate one at: https://myaccount.google.com/apppasswords",
-        });
+      // If port wasn't explicitly set and we're on 465, try 587 as fallback
+      if (!smtpConfig.port && port === 465 && (verifyError.code === "ECONNECTION" || verifyError.code === "ETIMEDOUT")) {
+        console.log("Trying fallback connection on port 587...");
+        transporter = createTransporter(587, false);
+        
+        try {
+          await Promise.race([
+            transporter.verify(),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error("Connection timeout: SMTP verification took too long (15s)")), 15000)
+            )
+          ]);
+          console.log("SMTP connection verified successfully on port 587 (fallback)");
+          lastError = null;
+        } catch (fallbackError) {
+          console.error("Fallback connection on port 587 also failed:", fallbackError.message, fallbackError.code);
+          lastError = fallbackError;
+        }
       }
       
-      if (verifyError.code === "ECONNECTION" || verifyError.code === "ETIMEDOUT") {
-        return res.status(503).json({
-          error: "Connection failed",
-          message: "Could not connect to Gmail SMTP server (smtp.gmail.com:587). This might be blocked by your hosting provider or firewall.",
-          details: "Render.com free tier may block outgoing SMTP connections. Consider upgrading or using a different email service.",
-        });
+      // If we still have an error after trying fallback
+      if (lastError) {
+        clearTimeout(responseTimeout);
+        
+        if (lastError.code === "EAUTH") {
+          return res.status(401).json({
+            error: "Authentication failed",
+            message: "Invalid Gmail credentials. Please verify your App Password is correct (16 characters, no spaces).",
+            details: "Make sure you're using a Gmail App Password, not your regular password. Generate one at: https://myaccount.google.com/apppasswords",
+          });
+        }
+        
+        if (lastError.code === "ECONNECTION" || lastError.code === "ETIMEDOUT") {
+          return res.status(503).json({
+            error: "Connection failed",
+            message: `Could not connect to Gmail SMTP server (${host}:${port}). This might be blocked by your hosting provider or firewall.`,
+            details: "Render.com free tier may block outgoing SMTP connections on ports 587 and 465. Try using a different email service (SendGrid, Mailgun) or upgrade your hosting plan.",
+            suggestion: "Consider using an email API service instead of direct SMTP for better reliability on cloud hosting.",
+          });
+        }
+        
+        throw lastError;
       }
-      
-      throw verifyError;
     }
 
     // Send email with timeout
