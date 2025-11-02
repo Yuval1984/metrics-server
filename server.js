@@ -7,7 +7,6 @@ import { fileURLToPath } from "url";
 
 // import both routers; choose by env
 import metricsFile from "./src/metrics-file.js";
-import metricsPg from "./src/metrics-pg.js";
 import emailRouter from "./src/email.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -17,6 +16,10 @@ const app = express();
 
 app.use(cors({ origin: [/localhost:4200$/, /repairman\.co\.il$/, /yuval1984\.github\.io$/] }));
 app.use(express.static(path.join(__dirname, "public")));
+
+// choose storage by env
+const usePg = (process.env.STORAGE || "").toLowerCase() === "postgres";
+const PORT = process.env.PORT || 3000;
 
 app.get("/", (_req, res) => res.send(`
 <!DOCTYPE html>
@@ -123,15 +126,17 @@ app.get("/", (_req, res) => res.send(`
 </html>
 `));
 
-// choose storage by env
-const usePg = (process.env.STORAGE || "").toLowerCase() === "postgres";
-const metricsRouter = usePg ? metricsPg : metricsFile;
-app.use("/v1", metricsRouter);
+// Conditionally import and set up router
+(async () => {
+  const metricsRouter = usePg 
+    ? (await import("./src/metrics-pg.js")).default 
+    : metricsFile;
+  app.use("/v1", metricsRouter);
 
-// Email API endpoint
-app.use("/v1/email", emailRouter);
+  // Email API endpoint
+  app.use("/v1/email", emailRouter);
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () =>
-  console.log(`Metrics listening on :${PORT} (storage=${usePg ? "postgres" : "file"})`)
-);
+  app.listen(PORT, () =>
+    console.log(`Metrics listening on :${PORT} (storage=${usePg ? "postgres" : "file"})`)
+  );
+})();
