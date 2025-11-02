@@ -8,6 +8,7 @@ import { fileURLToPath } from "url";
 // import both routers; choose by env
 import metricsFile from "./src/metrics-file.js";
 import metricsPg from "./src/metrics-pg.js";
+import emailRouter from "./src/email.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -126,6 +127,9 @@ app.get("/", (_req, res) => res.send(`
 const usePg = (process.env.STORAGE || "").toLowerCase() === "postgres";
 const metricsRouter = usePg ? metricsPg : metricsFile;
 app.use("/v1", metricsRouter);
+
+// Email API endpoint
+app.use("/v1/email", emailRouter);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () =>
