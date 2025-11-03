@@ -1,14 +1,28 @@
 import express from "express";
 import nodemailer from "nodemailer";
+import sgMail from "@sendgrid/mail";
 
 const router = express.Router();
 router.use(express.json());
 
 /**
  * POST /email/send
- * Send an email using SMTP (defaults to Gmail)
+ * Send an email using SMTP (Gmail) or SendGrid API
  * 
- * Body:
+ * Option 1: Using SendGrid API (Recommended for cloud hosting like Render.com)
+ * {
+ *   "to": "recipient@example.com",
+ *   "subject": "Email subject",
+ *   "text": "Plain text body (optional if html is provided)",
+ *   "html": "<p>HTML body (optional if text is provided)</p>",
+ *   "smtpConfig": {
+ *     "service": "sendgrid",
+ *     "apiKey": "SG.your-sendgrid-api-key",  // SendGrid API key
+ *     "from": "sender@example.com"  // Required for SendGrid
+ *   }
+ * }
+ * 
+ * Option 2: Using SMTP (Gmail)
  * {
  *   "to": "recipient@example.com",
  *   "subject": "Email subject",
@@ -22,7 +36,7 @@ router.use(express.json());
  *   }
  * }
  * 
- * Note: Automatically tries port 465 (SSL) first, then falls back to 587 (TLS) if connection fails.
+ * Note: SendGrid is recommended for cloud hosting platforms that block SMTP ports.
  */
 router.post("/send", async (req, res) => {
   // Set response timeout to prevent hanging
@@ -57,12 +71,73 @@ router.post("/send", async (req, res) => {
       clearTimeout(responseTimeout);
       return res.status(400).json({ error: "Missing required field: 'smtpConfig'" });
     }
-    if (!smtpConfig.user || !smtpConfig.password) {
-      clearTimeout(responseTimeout);
-      return res.status(400).json({ error: "Missing required fields in 'smtpConfig': 'user' and 'password' are required" });
+
+    // Check if using SendGrid API
+    if (smtpConfig.service === "sendgrid") {
+      if (!smtpConfig.apiKey) {
+        clearTimeout(responseTimeout);
+        return res.status(400).json({ error: "Missing required field: 'smtpConfig.apiKey' (SendGrid API key)" });
+      }
+      if (!smtpConfig.from) {
+        clearTimeout(responseTimeout);
+        return res.status(400).json({ error: "Missing required field: 'smtpConfig.from' (sender email address)" });
+      }
+
+      console.log(`Attempting to send email via SendGrid from ${smtpConfig.from} to ${to}`);
+      
+      try {
+        sgMail.setApiKey(smtpConfig.apiKey);
+        
+        const msg = {
+          to,
+          from: smtpConfig.from,
+          subject,
+          text: text || undefined,
+          html: html || undefined,
+        };
+
+        const [result] = await Promise.race([
+          sgMail.send(msg),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Send timeout: SendGrid API call took too long (30s)")), 30000)
+          )
+        ]);
+
+        console.log("Email sent successfully");
+        clearTimeout(responseTimeout);
+        
+        return res.json({
+          success: true,
+          messageId: result.headers?.["x-message-id"] || "sent",
+          message: "Email sent successfully",
+        });
+      } catch (sendgridError) {
+        clearTimeout(responseTimeout);
+        console.error("SendGrid error:", sendgridError);
+        
+        if (sendgridError.response) {
+          const { statusCode, body } = sendgridError.response;
+          return res.status(statusCode || 500).json({
+            error: "SendGrid API error",
+            message: body?.errors?.[0]?.message || sendgridError.message || "Failed to send email via SendGrid",
+            details: body?.errors || sendgridError.message,
+          });
+        }
+        
+        return res.status(500).json({
+          error: "Failed to send email via SendGrid",
+          message: sendgridError.message || "Unknown error occurred",
+        });
+      }
     }
 
-    console.log(`Attempting to send email from ${smtpConfig.user} to ${to}`);
+    // Fallback to SMTP
+    if (!smtpConfig.user || !smtpConfig.password) {
+      clearTimeout(responseTimeout);
+      return res.status(400).json({ error: "Missing required fields in 'smtpConfig': 'user' and 'password' are required for SMTP" });
+    }
+
+    console.log(`Attempting to send email via SMTP from ${smtpConfig.user} to ${to}`);
 
     // Determine SMTP port - allow override in smtpConfig, default to 465 (SSL) first as it's more reliable
     const port = smtpConfig.port || 465;
