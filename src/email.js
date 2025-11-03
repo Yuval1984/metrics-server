@@ -1,42 +1,27 @@
 import express from "express";
 import nodemailer from "nodemailer";
 import sgMail from "@sendgrid/mail";
+import { Resend } from "resend";
 
 const router = express.Router();
 router.use(express.json());
 
 /**
  * POST /email/send
- * Send an email using SMTP (Gmail) or SendGrid API
+ * Send an email using Resend API
  * 
- * Option 1: Using SendGrid API (Recommended for cloud hosting like Render.com)
+ * Payload
  * {
  *   "to": "recipient@example.com",
  *   "subject": "Email subject",
  *   "text": "Plain text body (optional if html is provided)",
  *   "html": "<p>HTML body (optional if text is provided)</p>",
- *   "smtpConfig": {
- *     "service": "sendgrid",
- *     "apiKey": "SG.your-sendgrid-api-key",  // SendGrid API key
- *     "from": "sender@example.com"  // Required for SendGrid
- *   }
+ *   "from": "no-reply@yourdomain.com" // optional; overrides RESEND_FROM
  * }
- * 
- * Option 2: Using SMTP (Gmail)
- * {
- *   "to": "recipient@example.com",
- *   "subject": "Email subject",
- *   "text": "Plain text body (optional if html is provided)",
- *   "html": "<p>HTML body (optional if text is provided)</p>",
- *   "smtpConfig": {
- *     "user": "your-email@gmail.com",
- *     "password": "your-app-password",  // Gmail App Password (16 characters, no spaces)
- *     "port": 465,  // Optional: 465 (SSL) or 587 (TLS). Defaults to 465, falls back to 587 if 465 fails
- *     "host": "smtp.gmail.com"  // Optional: defaults to smtp.gmail.com
- *   }
- * }
- * 
- * Note: SendGrid is recommended for cloud hosting platforms that block SMTP ports.
+ *
+ * Notes:
+ * - API key is read from server env: RESEND_API_KEY
+ * - Default sender can be set via RESEND_FROM; overridden by body.from
  */
 router.post("/send", async (req, res) => {
   // Set response timeout to prevent hanging
@@ -52,7 +37,7 @@ router.post("/send", async (req, res) => {
 
   try {
     console.log("Received email send request");
-    const { to, subject, text, html, smtpConfig } = req.body;
+    const { to, subject, text, html, from } = req.body;
 
     // Validate required fields
     if (!to) {
@@ -67,186 +52,70 @@ router.post("/send", async (req, res) => {
       clearTimeout(responseTimeout);
       return res.status(400).json({ error: "Missing required field: either 'text' or 'html' must be provided" });
     }
-    if (!smtpConfig) {
-      clearTimeout(responseTimeout);
-      return res.status(400).json({ error: "Missing required field: 'smtpConfig'" });
-    }
+    // Resend-only implementation
+    {
+      const apiKey = process.env.RESEND_API_KEY;
+      const fromAddress = from || process.env.RESEND_FROM;
 
-    // Check if using SendGrid API
-    if (smtpConfig.service === "sendgrid") {
-      if (!smtpConfig.apiKey) {
+      if (!apiKey) {
         clearTimeout(responseTimeout);
-        return res.status(400).json({ error: "Missing required field: 'smtpConfig.apiKey' (SendGrid API key)" });
-      }
-      if (!smtpConfig.from) {
-        clearTimeout(responseTimeout);
-        return res.status(400).json({ error: "Missing required field: 'smtpConfig.from' (sender email address)" });
+        return res.status(500).json({
+          error: "Missing server configuration",
+          message: "RESEND_API_KEY is not set on the server",
+        });
       }
 
-      console.log(`Attempting to send email via SendGrid from ${smtpConfig.from} to ${to}`);
-      
+      if (!fromAddress) {
+        clearTimeout(responseTimeout);
+        return res.status(400).json({
+          error: "Missing required field",
+          message: "Provide a 'from' address (top-level 'from' or 'smtpConfig.from') or set RESEND_FROM on the server",
+        });
+      }
+
+      console.log(`Attempting to send email via Resend from ${fromAddress} to ${to}`);
+
       try {
-        sgMail.setApiKey(smtpConfig.apiKey);
-        
-        const msg = {
-          to,
-          from: smtpConfig.from,
-          subject,
-          text: text || undefined,
-          html: html || undefined,
-        };
-
-        const [result] = await Promise.race([
-          sgMail.send(msg),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("Send timeout: SendGrid API call took too long (30s)")), 30000)
-          )
+        const resend = new Resend(apiKey);
+        const result = await Promise.race([
+          resend.emails.send({
+            from: fromAddress,
+            to,
+            subject,
+            html: html || undefined,
+            text: text || undefined,
+          }),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Send timeout: Resend API call took too long (30s)")), 30000)
+          ),
         ]);
 
-        console.log("Email sent successfully");
+        if (result?.error) {
+          console.error("Resend error:", result.error);
+          clearTimeout(responseTimeout);
+          return res.status(502).json({
+            error: "Resend API error",
+            message: result.error.message || "Failed to send email via Resend",
+            details: result.error,
+          });
+        }
+
+        console.log("Email sent successfully via Resend");
         clearTimeout(responseTimeout);
-        
         return res.json({
           success: true,
-          messageId: result.headers?.["x-message-id"] || "sent",
-          message: "Email sent successfully",
+          messageId: result?.data?.id || "sent",
+          message: "Email sent successfully via Resend",
         });
-      } catch (sendgridError) {
+      } catch (resendError) {
         clearTimeout(responseTimeout);
-        console.error("SendGrid error:", sendgridError);
-        
-        if (sendgridError.response) {
-          const { statusCode, body } = sendgridError.response;
-          return res.status(statusCode || 500).json({
-            error: "SendGrid API error",
-            message: body?.errors?.[0]?.message || sendgridError.message || "Failed to send email via SendGrid",
-            details: body?.errors || sendgridError.message,
-          });
-        }
-        
+        console.error("Resend exception:", resendError);
         return res.status(500).json({
-          error: "Failed to send email via SendGrid",
-          message: sendgridError.message || "Unknown error occurred",
+          error: "Failed to send email via Resend",
+          message: resendError.message || "Unknown error occurred",
         });
       }
     }
-
-    // Fallback to SMTP
-    if (!smtpConfig.user || !smtpConfig.password) {
-      clearTimeout(responseTimeout);
-      return res.status(400).json({ error: "Missing required fields in 'smtpConfig': 'user' and 'password' are required for SMTP" });
-    }
-
-    console.log(`Attempting to send email via SMTP from ${smtpConfig.user} to ${to}`);
-
-    // Determine SMTP port - allow override in smtpConfig, default to 465 (SSL) first as it's more reliable
-    const port = smtpConfig.port || 465;
-    const secure = port === 465;
-    const host = smtpConfig.host || "smtp.gmail.com";
-
-    // Create transporter configuration
-    const createTransporter = (port, secure) => {
-      return nodemailer.createTransport({
-        host: host,
-        port: port,
-        secure: secure, // true for 465, false for other ports
-        auth: {
-          user: smtpConfig.user,
-          pass: smtpConfig.password, // Gmail App Password or OAuth2 token
-        },
-        connectionTimeout: 10000, // 10 seconds to establish connection
-        greetingTimeout: 10000, // 10 seconds for SMTP greeting
-        socketTimeout: 10000, // 10 seconds for socket inactivity
-        debug: process.env.NODE_ENV === "development", // Enable debug logging in development
-      });
-    };
-
-    let transporter = createTransporter(port, secure);
-    let lastError = null;
-
-    // Try to connect - if port 465 fails, try 587 as fallback (unless port is explicitly set)
-    console.log(`Attempting SMTP connection to ${host}:${port} (secure: ${secure})...`);
-    
-    try {
-      await Promise.race([
-        transporter.verify(),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("Connection timeout: SMTP verification took too long (15s)")), 15000)
-        )
-      ]);
-      console.log(`SMTP connection verified successfully on port ${port}`);
-    } catch (verifyError) {
-      console.error(`SMTP verification failed on port ${port}:`, verifyError.message, verifyError.code);
-      lastError = verifyError;
-      
-      // If port wasn't explicitly set and we're on 465, try 587 as fallback
-      if (!smtpConfig.port && port === 465 && (verifyError.code === "ECONNECTION" || verifyError.code === "ETIMEDOUT")) {
-        console.log("Trying fallback connection on port 587...");
-        transporter = createTransporter(587, false);
-        
-        try {
-          await Promise.race([
-            transporter.verify(),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error("Connection timeout: SMTP verification took too long (15s)")), 15000)
-            )
-          ]);
-          console.log("SMTP connection verified successfully on port 587 (fallback)");
-          lastError = null;
-        } catch (fallbackError) {
-          console.error("Fallback connection on port 587 also failed:", fallbackError.message, fallbackError.code);
-          lastError = fallbackError;
-        }
-      }
-      
-      // If we still have an error after trying fallback
-      if (lastError) {
-        clearTimeout(responseTimeout);
-        
-        if (lastError.code === "EAUTH") {
-          return res.status(401).json({
-            error: "Authentication failed",
-            message: "Invalid Gmail credentials. Please verify your App Password is correct (16 characters, no spaces).",
-            details: "Make sure you're using a Gmail App Password, not your regular password. Generate one at: https://myaccount.google.com/apppasswords",
-          });
-        }
-        
-        if (lastError.code === "ECONNECTION" || lastError.code === "ETIMEDOUT") {
-          return res.status(503).json({
-            error: "Connection failed",
-            message: `Could not connect to Gmail SMTP server (${host}:${port}). This might be blocked by your hosting provider or firewall.`,
-            details: "Render.com free tier may block outgoing SMTP connections on ports 587 and 465. Try using a different email service (SendGrid, Mailgun) or upgrade your hosting plan.",
-            suggestion: "Consider using an email API service instead of direct SMTP for better reliability on cloud hosting.",
-          });
-        }
-        
-        throw lastError;
-      }
-    }
-
-    // Send email with timeout
-    console.log("Sending email...");
-    const info = await Promise.race([
-      transporter.sendMail({
-        from: `"${smtpConfig.user.split('@')[0]}" <${smtpConfig.user}>`,
-        to,
-        subject,
-        text: text || undefined,
-        html: html || undefined,
-      }),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Send timeout: Email sending took too long (30s)")), 30000)
-      )
-    ]);
-    
-    console.log("Email sent successfully:", info.messageId);
-    clearTimeout(responseTimeout);
-    
-    res.json({
-      success: true,
-      messageId: info.messageId,
-      message: "Email sent successfully",
-    });
   } catch (error) {
     clearTimeout(responseTimeout);
     console.error("Error sending email:", {
