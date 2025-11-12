@@ -14,7 +14,16 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-app.use(cors({ origin: [/localhost:4200$/, /repairman\.co\.il$/, /yuval1984\.github\.io$/] }));
+// Trust proxy for Render.com and similar platforms
+app.set("trust proxy", 1);
+
+// CORS configuration
+app.use(cors({
+  origin: [/localhost:\d+$/, /repairman\.co\.il$/, /yuval1984\.github\.io$/],
+  methods: ["GET", "POST", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "x-api-key"]
+}));
+
 app.use(express.static(path.join(__dirname, "public")));
 
 // choose storage by env
