@@ -158,7 +158,7 @@
         font-size: 12px;
       }
       canvas {
-        max-height: 260px;
+        max-height: 200px;
         width: 100% !important;
         height: 260px !important;
       }
@@ -244,9 +244,19 @@
 
         <div class="form-group">
           <label>Date range (for stats)</label>
-          <div class="row" style="grid-template-columns: 1fr 1fr">
+          <div class="row" style="grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end;">
             <input id="from" type="date" />
             <input id="to" type="date" />
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <label style="font-size: 11px; margin-bottom: 0;">Auto-refresh</label>
+              <select id="refreshInterval" style="width: 80px; padding: 8px;">
+                <option value="2000">2 sec</option>
+                <option value="5000">5 sec</option>
+                <option value="10000" selected>10 sec</option>
+                <option value="20000">20 sec</option>
+                <option value="0">Off</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -287,13 +297,19 @@
           <div class="row" style="grid-template-columns: 1fr 1fr; gap: 16px">
             <div id="deviceCard" style="text-align: center; display: block;">
               <label>Device Types (Active Sessions)</label>
-              <canvas id="deviceChart" height="280"></canvas>
+              <canvas id="deviceChart" height="160"></canvas>
             </div>
             <div id="countryCard" style="display: block;">
               <label>Top countries</label>
-              <canvas id="countryChart" height="280"></canvas>
+              <canvas id="countryChart" height="160"></canvas>
             </div>
           </div>
+        </div>
+
+        <!-- Avg Duration per Day Chart -->
+        <div class="card" id="avgDurationCard" style="margin-top: 16px; display: none;">
+          <label>Avg Duration per Day</label>
+          <canvas id="avgDurationChart" height="180"></canvas>
         </div>
       </div>
 
@@ -384,6 +400,7 @@
       const fromEl = document.getElementById("from");
       const toEl = document.getElementById("to");
       const loadBtn = document.getElementById("load");
+      const refreshIntervalEl = document.getElementById("refreshInterval");
       const totalEl = document.getElementById("totalVisits");
       const avgEl = document.getElementById("avgDur");
       const daysEl = document.getElementById("daysCount");
@@ -395,7 +412,8 @@
       const errorEl = document.getElementById("errorMessage");
       const realtimeStatusEl = document.getElementById("realtimeStatus");
 
-      let dailyChart, hourChart, deviceChart, countryChart;
+      let dailyChart, hourChart, deviceChart, countryChart, avgDurationChart;
+      let refreshIntervalId = null;
       const PALETTE = [
         "#60a5fa",
         "#f472b6",
@@ -413,9 +431,20 @@
       const fmtMs = (ms) => {
         if (!ms && ms !== 0) return "—";
         const s = Math.round(ms / 1000);
-        const m = Math.floor(s / 60),
-          r = s % 60;
-        return m ? `${m}m ${r}s` : `${r}s`;
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const r = s % 60;
+        
+        if (h > 0) {
+          // Show hours and minutes for large values
+          return m > 0 ? `${h}h ${m}m ${r}s` : `${h}h ${r}s`;
+        } else if (m > 0) {
+          // Show minutes and seconds for medium values
+          return r > 0 ? `${m}m ${r}s` : `${m}m`;
+        } else {
+          // Show only seconds for small values
+          return `${r}s`;
+        }
       };
       const httpGet = async (url, key) => {
         const headers = key ? { "x-api-key": key } : {};
@@ -727,9 +756,40 @@
         if (CONFIG.appKeys[first]) apiKeyEl.value = CONFIG.appKeys[first];
       };
 
+      // Function to setup/update auto-refresh interval (defined early for use in event handlers)
+      const setupAutoRefresh = () => {
+        // Clear existing interval
+        if (refreshIntervalId) {
+          clearInterval(refreshIntervalId);
+          refreshIntervalId = null;
+        }
+
+        // Get selected interval
+        const intervalMs = parseInt(refreshIntervalEl.value) || 0;
+        
+        // Set up new interval if not "Off"
+        if (intervalMs > 0) {
+          refreshIntervalId = setInterval(async () => {
+            try {
+              // Refresh both stats and real-time status (which includes charts)
+              await loadStats();
+              await loadRealtimeStatus();
+            } catch (error) {
+              console.error("Error refreshing data:", error);
+            }
+          }, intervalMs);
+          console.log(`Auto-refresh enabled: ${intervalMs}ms`);
+        } else {
+          console.log("Auto-refresh disabled");
+        }
+      };
+
       appEl.addEventListener("change", async () => {
         const a = appEl.value;
         apiKeyEl.value = CONFIG.appKeys[a] || "";
+        
+        // Restart auto-refresh with new app
+        setupAutoRefresh();
         
         // Reset data display while loading
         totalEl.textContent = avgEl.textContent = daysEl.textContent = "—";
@@ -738,6 +798,7 @@
         if (hourChart) hourChart.destroy();
         if (deviceChart) deviceChart.destroy();
         if (countryChart) countryChart.destroy();
+        if (avgDurationChart) avgDurationChart.destroy();
         daySelect.innerHTML = "";
         realtimeStatusEl.innerHTML = '<div class="muted">Loading...</div>';
         
@@ -974,6 +1035,94 @@
         });
       };
 
+      const buildAvgDurationChart = (days) => {
+        if (avgDurationChart) avgDurationChart.destroy();
+        const avgDurationCard = document.getElementById("avgDurationCard");
+        
+        const labels = days.map((d) => d.day);
+        const avgDurations = days.map((d) => {
+          // Convert ms to seconds for display
+          return d.avgDurationMs ? Math.round(d.avgDurationMs / 1000) : 0;
+        });
+
+        const hasAny = avgDurations.some((v) => v > 0);
+        if (!hasAny) {
+          avgDurationCard.style.display = "none";
+          return;
+        }
+
+        avgDurationCard.style.display = "block";
+        const ctx = document.getElementById("avgDurationChart").getContext("2d");
+        
+        avgDurationChart = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels,
+            datasets: [
+              {
+                label: "Avg Duration (seconds)",
+                data: avgDurations,
+                borderColor: "#10b981",
+                backgroundColor: "rgba(16, 185, 129, 0.1)",
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                pointBackgroundColor: "#10b981",
+                pointBorderColor: "#ffffff",
+                pointBorderWidth: 2,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                display: true,
+                position: "top",
+              },
+              tooltip: {
+                callbacks: {
+                  label: (context) => {
+                    const seconds = context.parsed.y;
+                    const minutes = Math.floor(seconds / 60);
+                    const secs = seconds % 60;
+                    return `Avg Duration: ${minutes}m ${secs}s (${seconds}s)`;
+                  },
+                },
+              },
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  precision: 0,
+                  callback: function(value) {
+                    const totalSeconds = value;
+                    const hours = Math.floor(totalSeconds / 3600);
+                    const minutes = Math.floor((totalSeconds % 3600) / 60);
+                    const secs = totalSeconds % 60;
+                    
+                    if (hours > 0) {
+                      // Show hours and minutes for large values
+                      return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+                    } else if (minutes > 0) {
+                      // Show minutes and seconds for medium values
+                      return secs > 0 ? `${minutes}m ${secs}s` : `${minutes}m`;
+                    } else {
+                      // Show only seconds for small values
+                      return `${secs}s`;
+                    }
+                  },
+                },
+              },
+            },
+          },
+        });
+      };
+
       const buildHour = (hourBuckets) => {
         const labels = Array.from({ length: 24 }, (_, i) =>
           String(i).padStart(2, "0")
@@ -1128,6 +1277,7 @@
 
           // charts
           buildDaily(days);
+          buildAvgDurationChart(days);
 
           // per-hour selector
           daySelect.innerHTML = days
@@ -1466,12 +1616,25 @@
           // Silently fail - real-time data is already showing
         });
 
-        // Auto-refresh real-time status every 10 seconds
-        setInterval(loadRealtimeStatus, 10000);
+        // Setup initial auto-refresh (default 10 seconds)
+        setupAutoRefresh();
+
+        // Update interval when dropdown changes
+        refreshIntervalEl.addEventListener("change", setupAutoRefresh);
 
         // Clean up on page unload
-        window.addEventListener("beforeunload", endDashboardSession);
-        window.addEventListener("pagehide", endDashboardSession);
+        window.addEventListener("beforeunload", () => {
+          if (refreshIntervalId) {
+            clearInterval(refreshIntervalId);
+          }
+          endDashboardSession();
+        });
+        window.addEventListener("pagehide", () => {
+          if (refreshIntervalId) {
+            clearInterval(refreshIntervalId);
+          }
+          endDashboardSession();
+        });
         
         // Also end all app sessions on unload
         window.addEventListener("beforeunload", () => {

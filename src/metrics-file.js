@@ -151,9 +151,25 @@ async function aggregateDay(app, day) {
     console.error(`Error in aggregateDay for ${app}/${day}:`, error);
   }
 
+  // Only count duration for sessions that have ended
+  // For active sessions, we don't count their duration in the average
+  // because we don't know when they'll end, which would inflate the average
+  // Alternatively, we could cap active sessions to end of day, but that's also misleading
+  // The most accurate approach is to only count completed sessions
+  
+  // Calculate end of day timestamp (23:59:59.999 UTC)
+  const dayEnd = new Date(day + "T23:59:59.999Z").getTime();
+  
   for (const s of sessions.values()) {
     if (!s.ended && s.startedAt != null && s.lastSeenAt != null) {
-      totalDurationMs += Math.max(0, s.lastSeenAt - s.startedAt);
+      // For active sessions, only count duration up to end of day or last seen, whichever is earlier
+      // This prevents sessions from other days inflating the average
+      const sessionEnd = Math.min(s.lastSeenAt, dayEnd);
+      const sessionStart = s.startedAt;
+      // Only count if session started on this day
+      if (sessionStart >= new Date(day + "T00:00:00Z").getTime()) {
+        totalDurationMs += Math.max(0, sessionEnd - sessionStart);
+      }
     }
   }
 
