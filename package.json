@@ -6,7 +6,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "check-db": "node check-database.js",
+    "test-device-types": "node test-device-types.js"
   },
   "repository": {
     "type": "git",

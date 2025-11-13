@@ -177,9 +177,32 @@ async function aggregateDay(app, day) {
     ORDER BY 1;
   `;
 
-  const [totals, hours] = await Promise.all([
+  // device types count per day
+  const deviceTypesQ = `
+    SELECT
+      CASE 
+        WHEN device_type = 'desktop' THEN 'pc'
+        WHEN device_type IN ('mobile', 'pc', 'tablet') THEN device_type
+        ELSE NULL
+      END AS mapped_device_type,
+      COUNT(*)::int AS visits
+    FROM sessions
+    WHERE app = $1
+      AND ((started_at AT TIME ZONE 'UTC')::date = $2::date)
+      AND device_type IS NOT NULL
+      AND device_type IN ('mobile', 'desktop', 'pc', 'tablet')
+    GROUP BY 
+      CASE 
+        WHEN device_type = 'desktop' THEN 'pc'
+        WHEN device_type IN ('mobile', 'pc', 'tablet') THEN device_type
+        ELSE NULL
+      END;
+  `;
+
+  const [totals, hours, deviceTypesResult] = await Promise.all([
     pool.query(totalsQ, params),
     pool.query(hoursQ, params),
+    pool.query(deviceTypesQ, params),
   ]);
 
   const totalVisits = totals.rows[0]?.visits || 0;
@@ -188,12 +211,21 @@ async function aggregateDay(app, day) {
   const hourBuckets = {};
   for (const r of hours.rows) hourBuckets[r.hour] = r.visits;
 
+  // Build deviceTypes object
+  const deviceTypes = { mobile: 0, pc: 0, tablet: 0 };
+  for (const r of deviceTypesResult.rows) {
+    if (r.mapped_device_type === 'mobile' || r.mapped_device_type === 'pc' || r.mapped_device_type === 'tablet') {
+      deviceTypes[r.mapped_device_type] = r.visits;
+    }
+  }
+
   return {
     day,
     hourBuckets,
     totalVisits,
     totalDurationMs,
     avgDurationMs: totalVisits ? Math.round(totalDurationMs / totalVisits) : 0,
+    deviceTypes,
   };
 }
 
@@ -312,6 +344,15 @@ router.get("/:app/status", requireKey, async (req, res) => {
   
   const result = await pool.query(activeSessionsQ, [app]);
   
+  // Count device types from active sessions
+  const deviceTypes = { mobile: 0, pc: 0, tablet: 0 };
+  for (const row of result.rows) {
+    const mappedDeviceType = row.device_type === 'desktop' ? 'pc' : (row.device_type || 'unknown');
+    if (mappedDeviceType === 'mobile' || mappedDeviceType === 'pc' || mappedDeviceType === 'tablet') {
+      deviceTypes[mappedDeviceType] = (deviceTypes[mappedDeviceType] || 0) + 1;
+    }
+  }
+  
   res.json({
     app,
     activeSessions: result.rows.length,
@@ -325,7 +366,8 @@ router.get("/:app/status", requireKey, async (req, res) => {
       ipAddress: row.ip_address,
       secondsSinceLastSeen: row.seconds_since_last_seen,
       sessionDurationSeconds: row.session_duration_seconds
-    }))
+    })),
+    deviceTypes
   });
 });
 
