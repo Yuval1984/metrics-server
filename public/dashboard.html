@@ -189,6 +189,54 @@
           grid-template-columns: 1fr;
         }
       }
+      /* Spinner styles - colorful variants */
+      .spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid rgba(59, 130, 246, 0.3);
+        border-radius: 50%;
+        border-top-color: #3b82f6;
+        animation: spin 0.8s linear infinite;
+      }
+      .spinner.spinner-1 {
+        border-color: rgba(59, 130, 246, 0.3);
+        border-top-color: #3b82f6; /* Blue */
+      }
+      .spinner.spinner-2 {
+        border-color: rgba(16, 185, 129, 0.3);
+        border-top-color: #10b981; /* Green */
+      }
+      .spinner.spinner-3 {
+        border-color: rgba(245, 158, 11, 0.3);
+        border-top-color: #f59e0b; /* Orange */
+      }
+      .spinner.spinner-4 {
+        border-color: rgba(139, 92, 246, 0.3);
+        border-top-color: #8b5cf6; /* Purple */
+      }
+      .spinner.spinner-5 {
+        border-color: rgba(239, 68, 68, 0.3);
+        border-top-color: #ef4444; /* Red */
+      }
+      .spinner.spinner-6 {
+        border-color: rgba(6, 182, 212, 0.3);
+        border-top-color: #06b6d4; /* Cyan */
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      .loading-overlay {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100px;
+        color: var(--muted-fg);
+        font-size: 14px;
+      }
+      .loading-overlay .spinner {
+        margin-right: 8px;
+      }
     </style>
     <!-- Chart.js (CDN) -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
@@ -288,7 +336,10 @@
             <h3 style="margin: 0; font-size: 16px">Real-time Status</h3>
           </div>
           <div id="realtimeStatus">
-            <div class="muted">Loading active sessions...</div>
+            <div class="loading-overlay">
+              <span class="spinner spinner-3"></span>
+              <span>Loading active sessions...</span>
+            </div>
           </div>
         </div>
 
@@ -297,11 +348,19 @@
           <div class="row" style="grid-template-columns: 1fr 1fr; gap: 16px">
             <div id="deviceCard" style="text-align: center; display: block;">
               <label>Device Types (Active Sessions)</label>
-              <canvas id="deviceChart" height="160"></canvas>
+              <div id="deviceChartLoading" class="loading-overlay">
+                <span class="spinner spinner-4"></span>
+                <span>Loading...</span>
+              </div>
+              <canvas id="deviceChart" height="160" style="display: none;"></canvas>
             </div>
             <div id="countryCard" style="display: block;">
               <label>Top countries</label>
-              <canvas id="countryChart" height="160"></canvas>
+              <div id="countryChartLoading" class="loading-overlay">
+                <span class="spinner spinner-5"></span>
+                <span>Loading...</span>
+              </div>
+              <canvas id="countryChart" height="160" style="display: none;"></canvas>
             </div>
           </div>
         </div>
@@ -309,51 +368,75 @@
         <!-- Avg Duration per Day Chart -->
         <div class="card" id="avgDurationCard" style="margin-top: 16px; display: none;">
           <label>Avg Duration per Day</label>
-          <canvas id="avgDurationChart" height="180"></canvas>
+          <div id="avgDurationChartLoading" class="loading-overlay">
+            <span class="spinner spinner-6"></span>
+            <span>Loading chart...</span>
+          </div>
+          <canvas id="avgDurationChart" height="180" style="display: none;"></canvas>
         </div>
       </div>
 
       <div style="display: flex; flex-direction: column; gap: 12px">
         <!-- Combined metrics in one row -->
-        <div class="card grid">
+        <div class="card grid" id="metricsCard">
           <div class="stat">
             <div class="muted">Total visits</div>
-            <div class="v" id="totalVisits">—</div>
+            <div class="v" id="totalVisits">
+              <span class="spinner spinner-1"></span>
+            </div>
           </div>
           <div class="stat">
             <div class="muted">Avg duration</div>
-            <div class="v" id="avgDur">—</div>
+            <div class="v" id="avgDur">
+              <span class="spinner spinner-2"></span>
+            </div>
           </div>
           <div class="stat">
             <div class="muted">Days included</div>
-            <div class="v" id="daysCount">—</div>
+            <div class="v" id="daysCount">
+              <span class="spinner spinner-3"></span>
+            </div>
           </div>
           <div class="stat">
             <div class="muted">Today visits</div>
-            <div class="v" id="todayVisits">—</div>
+            <div class="v" id="todayVisits">
+              <span class="spinner spinner-4"></span>
+            </div>
           </div>
           <div class="stat">
             <div class="muted">Month visits</div>
-            <div class="v" id="monthVisits">—</div>
+            <div class="v" id="monthVisits">
+              <span class="spinner spinner-5"></span>
+            </div>
           </div>
           <div class="stat">
             <div class="muted">Total duration</div>
-            <div class="v" id="totalDuration">—</div>
+            <div class="v" id="totalDuration">
+              <span class="spinner spinner-6"></span>
+            </div>
           </div>
         </div>
 
         <!-- Visits chart -->
         <div class="card" id="dailyCard">
           <label>Visits</label>
-          <canvas id="dailyChart" height="220"></canvas>
+          <div id="dailyChartLoading" class="loading-overlay">
+            <span class="spinner"></span>
+            <span>Loading chart...</span>
+          </div>
+          <canvas id="dailyChart" height="220" style="display: none;"></canvas>
         </div>
 
         <!-- Per-hour chart -->
-        <div class="card">
+        <div class="card" id="hourCard">
           <label>Per-hour (pick a day)</label>
-          <select id="daySelect"></select>
+          <select id="daySelect" style="display: none;"></select>
+          <div id="hourChartLoading" class="loading-overlay">
+            <span class="spinner spinner-2"></span>
+            <span>Loading chart...</span>
+          </div>
           <div style="height: 8px"></div>
-          <canvas id="hourChart" height="220"></canvas>
+          <canvas id="hourChart" height="220" style="display: none;"></canvas>
         </div>
       </div>
     </div>
@@ -552,7 +635,7 @@
         }
       };
 
-      const loadRealtimeStatus = async () => {
+      const loadRealtimeStatus = async (showSpinners = true) => {
         const app = appEl.value;
         const key = apiKeyEl.value || undefined;
 
@@ -560,6 +643,17 @@
           realtimeStatusEl.innerHTML =
             '<div class="muted">Please select an app to view real-time status.</div>';
           return;
+        }
+        
+        // Show loading spinner (only if showSpinners is true)
+        if (showSpinners) {
+          realtimeStatusEl.innerHTML = '<div class="loading-overlay"><span class="spinner spinner-3"></span><span>Loading active sessions...</span></div>';
+          
+          // Show loading for charts
+          document.getElementById("deviceChartLoading").style.display = "flex";
+          document.getElementById("deviceChart").style.display = "none";
+          document.getElementById("countryChartLoading").style.display = "flex";
+          document.getElementById("countryChart").style.display = "none";
         }
 
         try {
@@ -772,8 +866,9 @@
           refreshIntervalId = setInterval(async () => {
             try {
               // Refresh both stats and real-time status (which includes charts)
-              await loadStats();
-              await loadRealtimeStatus();
+              // Pass showSpinners: false to avoid showing spinners during auto-refresh
+              await loadStats(false);
+              await loadRealtimeStatus(false);
             } catch (error) {
               console.error("Error refreshing data:", error);
             }
@@ -791,16 +886,35 @@
         // Restart auto-refresh with new app
         setupAutoRefresh();
         
-        // Reset data display while loading
-        totalEl.textContent = avgEl.textContent = daysEl.textContent = "—";
-        todayEl.textContent = monthEl.textContent = totalDurEl.textContent = "—";
+        // Reset data display while loading - show colorful spinners
+        totalEl.innerHTML = '<span class="spinner spinner-1"></span>';
+        avgEl.innerHTML = '<span class="spinner spinner-2"></span>';
+        daysEl.innerHTML = '<span class="spinner spinner-3"></span>';
+        todayEl.innerHTML = '<span class="spinner spinner-4"></span>';
+        monthEl.innerHTML = '<span class="spinner spinner-5"></span>';
+        totalDurEl.innerHTML = '<span class="spinner spinner-6"></span>';
+        
         if (dailyChart) dailyChart.destroy();
         if (hourChart) hourChart.destroy();
         if (deviceChart) deviceChart.destroy();
         if (countryChart) countryChart.destroy();
         if (avgDurationChart) avgDurationChart.destroy();
+        
+        // Show loading overlays for charts
+        document.getElementById("dailyChartLoading").style.display = "flex";
+        document.getElementById("dailyChart").style.display = "none";
+        document.getElementById("hourChartLoading").style.display = "flex";
+        document.getElementById("hourChart").style.display = "none";
+        document.getElementById("daySelect").style.display = "none";
+        document.getElementById("deviceChartLoading").style.display = "flex";
+        document.getElementById("deviceChart").style.display = "none";
+        document.getElementById("countryChartLoading").style.display = "flex";
+        document.getElementById("countryChart").style.display = "none";
+        document.getElementById("avgDurationChartLoading").style.display = "flex";
+        document.getElementById("avgDurationChart").style.display = "none";
+        
         daySelect.innerHTML = "";
-        realtimeStatusEl.innerHTML = '<div class="muted">Loading...</div>';
+        realtimeStatusEl.innerHTML = '<div class="loading-overlay"><span class="spinner spinner-3"></span><span>Loading active sessions...</span></div>';
         
         // Step 1: Start session for the app
         await trackAppSession(a);
@@ -819,16 +933,22 @@
         const totals = days.map((d) => d.totalVisits);
 
         const dailyCard = document.getElementById("dailyCard");
+        const dailyChartLoading = document.getElementById("dailyChartLoading");
+        const dailyChartCanvas = document.getElementById("dailyChart");
         const hasAny = totals.some((v) => v > 0);
         if (!hasAny) {
           dailyCard.style.display = "none";
+          dailyChartLoading.style.display = "none";
           if (dailyChart) dailyChart.destroy();
           return;
         } else {
           dailyCard.style.display = "block";
         }
         if (dailyChart) dailyChart.destroy();
-        const ctx = document.getElementById("dailyChart").getContext("2d");
+        // Hide loading, show chart
+        dailyChartLoading.style.display = "none";
+        dailyChartCanvas.style.display = "block";
+        const ctx = dailyChartCanvas.getContext("2d");
         dailyChart = new Chart(ctx, {
           type: "bar",
           data: {
@@ -918,7 +1038,12 @@
         // Show device card
         deviceCard.style.display = "block";
         
-        const ctx = document.getElementById("deviceChart").getContext("2d");
+        // Hide loading, show chart
+        const deviceChartLoading = document.getElementById("deviceChartLoading");
+        const deviceChartCanvas = document.getElementById("deviceChart");
+        deviceChartLoading.style.display = "none";
+        deviceChartCanvas.style.display = "block";
+        const ctx = deviceChartCanvas.getContext("2d");
         deviceChart = new Chart(ctx, {
           type: "pie",
           data: {
@@ -982,7 +1107,12 @@
         // Show the country card
         countryCard.style.display = "block";
         
-        const ctx = document.getElementById("countryChart").getContext("2d");
+        // Hide loading, show chart
+        const countryChartLoading = document.getElementById("countryChartLoading");
+        const countryChartCanvas = document.getElementById("countryChart");
+        countryChartLoading.style.display = "none";
+        countryChartCanvas.style.display = "block";
+        const ctx = countryChartCanvas.getContext("2d");
         
         // Create labels as "Country, City"
         const labels = filtered.map((r) => {
@@ -1045,14 +1175,21 @@
           return d.avgDurationMs ? Math.round(d.avgDurationMs / 1000) : 0;
         });
 
+        const avgDurationChartLoading = document.getElementById("avgDurationChartLoading");
+        const avgDurationChartCanvas = document.getElementById("avgDurationChart");
+        
         const hasAny = avgDurations.some((v) => v > 0);
         if (!hasAny) {
           avgDurationCard.style.display = "none";
+          avgDurationChartLoading.style.display = "none";
           return;
         }
 
         avgDurationCard.style.display = "block";
-        const ctx = document.getElementById("avgDurationChart").getContext("2d");
+        // Hide loading, show chart
+        avgDurationChartLoading.style.display = "none";
+        avgDurationChartCanvas.style.display = "block";
+        const ctx = avgDurationChartCanvas.getContext("2d");
         
         avgDurationChart = new Chart(ctx, {
           type: "line",
@@ -1129,8 +1266,16 @@
         );
         const data = labels.map((h) => hourBuckets[h] || 0);
 
+        const hourChartLoading = document.getElementById("hourChartLoading");
+        const hourChartCanvas = document.getElementById("hourChart");
+        const daySelect = document.getElementById("daySelect");
+        
         if (hourChart) hourChart.destroy();
-        const ctx = document.getElementById("hourChart").getContext("2d");
+        // Hide loading, show chart and selector
+        hourChartLoading.style.display = "none";
+        hourChartCanvas.style.display = "block";
+        if (daySelect.innerHTML) daySelect.style.display = "block";
+        const ctx = hourChartCanvas.getContext("2d");
         hourChart = new Chart(ctx, {
           type: "line",
           data: {
@@ -1177,9 +1322,28 @@
       };
 
       /** ====== main load - Stats (Historical Aggregated Data) ====== */
-      const loadStats = async () => {
+      const loadStats = async (showSpinners = true) => {
         loadBtn.disabled = true;
         hideError();
+        
+        // Show colorful spinners for metrics while loading (only if showSpinners is true)
+        if (showSpinners) {
+          totalEl.innerHTML = '<span class="spinner spinner-1"></span>';
+          avgEl.innerHTML = '<span class="spinner spinner-2"></span>';
+          daysEl.innerHTML = '<span class="spinner spinner-3"></span>';
+          todayEl.innerHTML = '<span class="spinner spinner-4"></span>';
+          monthEl.innerHTML = '<span class="spinner spinner-5"></span>';
+          totalDurEl.innerHTML = '<span class="spinner spinner-6"></span>';
+          
+          // Show loading overlays for charts
+          document.getElementById("dailyChartLoading").style.display = "flex";
+          document.getElementById("dailyChart").style.display = "none";
+          document.getElementById("hourChartLoading").style.display = "flex";
+          document.getElementById("hourChart").style.display = "none";
+          document.getElementById("daySelect").style.display = "none";
+          document.getElementById("avgDurationChartLoading").style.display = "flex";
+          document.getElementById("avgDurationChart").style.display = "none";
+        }
 
         const app = appEl.value;
         const key = apiKeyEl.value || undefined;
