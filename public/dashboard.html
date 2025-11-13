@@ -1074,13 +1074,40 @@
           const todayData = days.find((d) => d.day === today);
           const todayVisits = todayData ? todayData.totalVisits : 0;
 
-          // Calculate month visits (current month)
+          // Calculate month visits (entire current month, not just selected range)
           const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
-          const monthDays = days.filter((d) => d.day.startsWith(currentMonth));
-          const monthVisits = monthDays.reduce(
-            (a, d) => a + (d.totalVisits || 0),
-            0
-          );
+          let monthVisits = 0;
+          
+          // If the selected range includes the current month, fetch full month data
+          const monthStart = currentMonth + "-01";
+          const monthEnd = new Date(new Date(currentMonth + "-01").setMonth(new Date(currentMonth + "-01").getMonth() + 1) - 1).toISOString().slice(0, 10);
+          
+          // Check if we need to fetch month data separately
+          const selectedRangeIncludesMonth = days.some(d => d.day.startsWith(currentMonth));
+          if (selectedRangeIncludesMonth) {
+            // Fetch full month data
+            try {
+              const monthData = await httpGet(
+                `${CONFIG.baseUrl}/${encodeURIComponent(app)}/stats?from=${monthStart}&to=${monthEnd}`,
+                key
+              );
+              const monthDays = (monthData.days || []).filter((d) => d.day.startsWith(currentMonth));
+              monthVisits = monthDays.reduce(
+                (a, d) => a + (d.totalVisits || 0),
+                0
+              );
+            } catch (err) {
+              // Fallback to selected range if fetch fails
+              const monthDays = days.filter((d) => d.day.startsWith(currentMonth));
+              monthVisits = monthDays.reduce(
+                (a, d) => a + (d.totalVisits || 0),
+                0
+              );
+            }
+          } else {
+            // Selected range doesn't include current month, so month visits is 0
+            monthVisits = 0;
+          }
 
           console.log("Updating display with:", {
             totalVisits,
