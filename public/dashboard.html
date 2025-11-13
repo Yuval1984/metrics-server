@@ -438,6 +438,18 @@
           <div style="height: 8px"></div>
           <canvas id="hourChart" height="220" style="display: none;"></canvas>
         </div>
+
+        <!-- Device Types per Day chart -->
+        <div class="card" id="deviceTypesDayCard">
+          <label>Device Types per Day</label>
+          <select id="deviceTypesDaySelect" style="display: none;"></select>
+          <div id="deviceTypesDayChartLoading" class="loading-overlay">
+            <span class="spinner spinner-1"></span>
+            <span>Loading chart...</span>
+          </div>
+          <div style="height: 8px"></div>
+          <canvas id="deviceTypesDayChart" height="220" style="display: none;"></canvas>
+        </div>
       </div>
     </div>
 
@@ -492,10 +504,11 @@
       const totalDurEl = document.getElementById("totalDuration");
       const rawEl = document.getElementById("raw");
       const daySelect = document.getElementById("daySelect");
+      const deviceTypesDaySelect = document.getElementById("deviceTypesDaySelect");
       const errorEl = document.getElementById("errorMessage");
       const realtimeStatusEl = document.getElementById("realtimeStatus");
 
-      let dailyChart, hourChart, deviceChart, countryChart, avgDurationChart;
+      let dailyChart, hourChart, deviceChart, countryChart, avgDurationChart, deviceTypesDayChart;
       let refreshIntervalId = null;
       const PALETTE = [
         "#60a5fa",
@@ -899,6 +912,7 @@
         if (deviceChart) deviceChart.destroy();
         if (countryChart) countryChart.destroy();
         if (avgDurationChart) avgDurationChart.destroy();
+        if (deviceTypesDayChart) deviceTypesDayChart.destroy();
         
         // Show loading overlays for charts
         document.getElementById("dailyChartLoading").style.display = "flex";
@@ -906,6 +920,9 @@
         document.getElementById("hourChartLoading").style.display = "flex";
         document.getElementById("hourChart").style.display = "none";
         document.getElementById("daySelect").style.display = "none";
+        document.getElementById("deviceTypesDayChartLoading").style.display = "flex";
+        document.getElementById("deviceTypesDayChart").style.display = "none";
+        document.getElementById("deviceTypesDaySelect").style.display = "none";
         document.getElementById("deviceChartLoading").style.display = "flex";
         document.getElementById("deviceChart").style.display = "none";
         document.getElementById("countryChartLoading").style.display = "flex";
@@ -914,6 +931,7 @@
         document.getElementById("avgDurationChart").style.display = "none";
         
         daySelect.innerHTML = "";
+        deviceTypesDaySelect.innerHTML = "";
         realtimeStatusEl.innerHTML = '<div class="loading-overlay"><span class="spinner spinner-3"></span><span>Loading active sessions...</span></div>';
         
         // Step 1: Start session for the app
@@ -1321,6 +1339,72 @@
         });
       };
 
+      const buildDeviceTypesDay = (deviceTypes) => {
+        if (!deviceTypes) {
+          deviceTypes = { mobile: 0, pc: 0, tablet: 0 };
+        }
+
+        const deviceTypesDayChartLoading = document.getElementById("deviceTypesDayChartLoading");
+        const deviceTypesDayChartCanvas = document.getElementById("deviceTypesDayChart");
+        const deviceTypesDaySelect = document.getElementById("deviceTypesDaySelect");
+        
+        if (deviceTypesDayChart) deviceTypesDayChart.destroy();
+        // Hide loading, show chart and selector
+        deviceTypesDayChartLoading.style.display = "none";
+        deviceTypesDayChartCanvas.style.display = "block";
+        if (deviceTypesDaySelect.innerHTML) deviceTypesDaySelect.style.display = "block";
+        
+        const ctx = deviceTypesDayChartCanvas.getContext("2d");
+        
+        const labels = ["Mobile", "PC", "Tablet"];
+        const data = [
+          deviceTypes.mobile || 0,
+          deviceTypes.pc || 0,
+          deviceTypes.tablet || 0
+        ];
+        
+        deviceTypesDayChart = new Chart(ctx, {
+          type: "bar",
+          data: {
+            labels,
+            datasets: [
+              {
+                label: "Visits",
+                data,
+                backgroundColor: [
+                  "#3b82f6", // Blue for mobile
+                  "#10b981", // Green for PC
+                  "#f59e0b", // Orange for tablet
+                ],
+                borderColor: [
+                  "#2563eb",
+                  "#059669",
+                  "#d97706",
+                ],
+                borderWidth: 2,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  precision: 0,
+                },
+              },
+            },
+            plugins: {
+              legend: {
+                display: true,
+              },
+            },
+          },
+        });
+      };
+
       /** ====== main load - Stats (Historical Aggregated Data) ====== */
       const loadStats = async (showSpinners = true) => {
         loadBtn.disabled = true;
@@ -1341,6 +1425,9 @@
           document.getElementById("hourChartLoading").style.display = "flex";
           document.getElementById("hourChart").style.display = "none";
           document.getElementById("daySelect").style.display = "none";
+          document.getElementById("deviceTypesDayChartLoading").style.display = "flex";
+          document.getElementById("deviceTypesDayChart").style.display = "none";
+          document.getElementById("deviceTypesDaySelect").style.display = "none";
           document.getElementById("avgDurationChartLoading").style.display = "flex";
           document.getElementById("avgDurationChart").style.display = "none";
         }
@@ -1459,6 +1546,22 @@
             buildHour({});
           }
 
+          // device types per day selector
+          deviceTypesDaySelect.innerHTML = days
+            .map((d) => `<option value="${d.day}">${d.day}</option>`)
+            .join("");
+          deviceTypesDaySelect.onchange = () => {
+            const sel = days.find((d) => d.day === deviceTypesDaySelect.value);
+            buildDeviceTypesDay(sel ? sel.deviceTypes : null);
+          };
+          if (days[0]) {
+            deviceTypesDaySelect.value = days[days.length - 1].day; // latest
+            buildDeviceTypesDay(days[days.length - 1].deviceTypes || null);
+          } else {
+            deviceTypesDaySelect.innerHTML = "";
+            buildDeviceTypesDay(null);
+          }
+
           // Load analytics for country chart in background (non-blocking)
           // Real-time data from loadRealtimeStatus already shows the chart immediately
           // This is just a fallback for historical data if no real-time data exists
@@ -1502,6 +1605,7 @@
               "—";
           if (dailyChart) dailyChart.destroy();
           if (hourChart) hourChart.destroy();
+          if (deviceTypesDayChart) deviceTypesDayChart.destroy();
         } finally {
           loadBtn.disabled = false;
         }

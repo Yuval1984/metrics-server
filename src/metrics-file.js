@@ -74,6 +74,7 @@ async function aggregateDay(app, day) {
     totalDurationMs = 0;
   const hourBuckets = {};
   const sessions = new Map();
+  const deviceTypes = { mobile: 0, pc: 0, tablet: 0 }; // Track device types per day
 
   try {
     // Check if file exists first
@@ -86,6 +87,7 @@ async function aggregateDay(app, day) {
       totalVisits: 0,
       totalDurationMs: 0,
       avgDurationMs: 0,
+      deviceTypes,
     };
   }
 
@@ -104,17 +106,25 @@ async function aggregateDay(app, day) {
         } catch {
           return;
         }
-        const { type, ts, sessionId } = e;
+        const { type, ts, sessionId, deviceType } = e;
         if (!sessionId) return;
         let s = sessions.get(sessionId);
         if (!s) {
-          s = { startedAt: null, lastSeenAt: null, ended: false };
+          s = { startedAt: null, lastSeenAt: null, ended: false, deviceType: null };
           sessions.set(sessionId, s);
         }
 
         if (type === "start") {
           s.startedAt = ts;
           s.lastSeenAt = ts;
+          if (deviceType) {
+            s.deviceType = deviceType;
+            // Map deviceType to the format requested: desktop -> pc
+            const mappedType = deviceType === 'desktop' ? 'pc' : deviceType;
+            if (mappedType === 'mobile' || mappedType === 'pc' || mappedType === 'tablet') {
+              deviceTypes[mappedType] = (deviceTypes[mappedType] || 0) + 1;
+            }
+          }
           totalVisits++;
           const h = hourUTC(ts);
           hourBuckets[h] = (hourBuckets[h] ?? 0) + 1;
@@ -179,6 +189,7 @@ async function aggregateDay(app, day) {
     totalVisits,
     totalDurationMs,
     avgDurationMs: totalVisits ? Math.round(totalDurationMs / totalVisits) : 0,
+    deviceTypes,
   };
 }
 
@@ -239,6 +250,7 @@ router.get("/:app/status", requireKey, async (req, res) => {
   
   const activeSessions = [];
   const sessions = new Map();
+  const deviceTypes = { mobile: 0, pc: 0, tablet: 0 }; // Track device types from active sessions
   
   try {
     await new Promise((resolve) => {
@@ -290,6 +302,14 @@ router.get("/:app/status", requireKey, async (req, res) => {
     
     for (const [sessionId, session] of sessions.entries()) {
       if (!session.ended && session.lastSeenAt && session.lastSeenAt > fiveMinutesAgo) {
+        // Map deviceType: desktop -> pc
+        const mappedDeviceType = session.deviceType === 'desktop' ? 'pc' : (session.deviceType || 'unknown');
+        
+        // Count device types for active sessions
+        if (mappedDeviceType === 'mobile' || mappedDeviceType === 'pc' || mappedDeviceType === 'tablet') {
+          deviceTypes[mappedDeviceType] = (deviceTypes[mappedDeviceType] || 0) + 1;
+        }
+        
         activeSessions.push({
           sessionId,
           ipAddress: session.ipAddress || 'unknown',
@@ -313,7 +333,8 @@ router.get("/:app/status", requireKey, async (req, res) => {
   res.json({
     app,
     activeSessions: activeSessions.length,
-    sessions: activeSessions
+    sessions: activeSessions,
+    deviceTypes
   });
 });
 
