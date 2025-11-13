@@ -1,5 +1,5 @@
 import express from "express";
-import { mkdir, appendFile, rm, stat } from "fs/promises";
+import { mkdir, appendFile, rm, stat, readdir } from "fs/promises";
 import { createReadStream } from "fs";
 import path from "path";
 import crypto from "crypto";
@@ -17,6 +17,32 @@ const hourUTC = (ts) => String(new Date(ts).getUTCHours()).padStart(2, "0");
 const rid = () => crypto.randomUUID();
 const dayFile = (app, day) => path.join(DATA_ROOT, app, `${day}.ndjson`);
 const ensureDir = (p) => mkdir(p, { recursive: true });
+
+// Helper to detect device type from user agent
+const detectDeviceType = (userAgent) => {
+  if (!userAgent) return 'unknown';
+  const ua = userAgent.toLowerCase();
+  if (ua.includes('mobile') || ua.includes('android') || ua.includes('iphone')) {
+    return 'mobile';
+  }
+  if (ua.includes('tablet') || ua.includes('ipad')) {
+    return 'tablet';
+  }
+  return 'desktop';
+};
+
+// Helper to extract client info from request
+const getClientInfo = (req) => {
+  const userAgent = req.get('User-Agent') || '';
+  const ipAddress = req.ip || req.connection.remoteAddress || req.socket.remoteAddress || 
+    (req.connection.socket ? req.connection.socket.remoteAddress : null) || 'unknown';
+  
+  return {
+    userAgent,
+    ipAddress,
+    deviceType: detectDeviceType(userAgent)
+  };
+};
 
 function requireKey(req, res, next) {
   if (!Object.keys(API_KEYS).length) return next();
@@ -49,43 +75,81 @@ async function aggregateDay(app, day) {
   const hourBuckets = {};
   const sessions = new Map();
 
-  await new Promise((resolve) => {
-    const rl = readline.createInterface({ input: createReadStream(file), crlfDelay: Infinity });
-    rl.on("line", (line) => {
-      if (!line.trim()) return;
-      let e;
-      try {
-        e = JSON.parse(line);
-      } catch {
-        return;
-      }
-      const { type, ts, sessionId } = e;
-      if (!sessionId) return;
-      let s = sessions.get(sessionId);
-      if (!s) {
-        s = { startedAt: null, lastSeenAt: null, ended: false };
-        sessions.set(sessionId, s);
-      }
+  try {
+    // Check if file exists first
+    await stat(file);
+  } catch (error) {
+    // File doesn't exist, return empty stats
+    return {
+      day,
+      hourBuckets,
+      totalVisits: 0,
+      totalDurationMs: 0,
+      avgDurationMs: 0,
+    };
+  }
 
-      if (type === "start") {
-        s.startedAt = ts;
-        s.lastSeenAt = ts;
-        totalVisits++;
-        const h = hourUTC(ts);
-        hourBuckets[h] = (hourBuckets[h] ?? 0) + 1;
-      } else if (type === "heartbeat") {
-        s.lastSeenAt = Math.max(s.lastSeenAt ?? 0, ts);
-      } else if (type === "end") {
-        if (s.startedAt != null && !s.ended) {
-          s.lastSeenAt = Math.max(s.lastSeenAt ?? 0, ts);
-          totalDurationMs += Math.max(0, s.lastSeenAt - s.startedAt);
-          s.ended = true;
+  try {
+    await new Promise((resolve, reject) => {
+      const stream = createReadStream(file);
+      const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+      let lineCount = 0;
+      
+      rl.on("line", (line) => {
+        if (!line.trim()) return;
+        lineCount++;
+        let e;
+        try {
+          e = JSON.parse(line);
+        } catch {
+          return;
         }
-      }
+        const { type, ts, sessionId } = e;
+        if (!sessionId) return;
+        let s = sessions.get(sessionId);
+        if (!s) {
+          s = { startedAt: null, lastSeenAt: null, ended: false };
+          sessions.set(sessionId, s);
+        }
+
+        if (type === "start") {
+          s.startedAt = ts;
+          s.lastSeenAt = ts;
+          totalVisits++;
+          const h = hourUTC(ts);
+          hourBuckets[h] = (hourBuckets[h] ?? 0) + 1;
+        } else if (type === "heartbeat") {
+          s.lastSeenAt = Math.max(s.lastSeenAt ?? 0, ts);
+        } else if (type === "end") {
+          if (s.startedAt != null && !s.ended) {
+            s.lastSeenAt = Math.max(s.lastSeenAt ?? 0, ts);
+            totalDurationMs += Math.max(0, s.lastSeenAt - s.startedAt);
+            s.ended = true;
+          }
+        }
+      });
+      
+      rl.on("close", () => {
+        resolve();
+      });
+      
+      rl.on("error", (err) => {
+        console.error(`Readline error for ${file}:`, err);
+        resolve(); // Resolve anyway to return what we have
+      });
+      
+      stream.on("error", (err) => {
+        if (err.code === 'ENOENT') {
+          resolve(); // File was deleted, return empty stats
+        } else {
+          console.error(`Stream error for ${file}:`, err);
+          resolve(); // Resolve anyway
+        }
+      });
     });
-    rl.on("close", resolve);
-    rl.on("error", () => resolve());
-  });
+  } catch (error) {
+    console.error(`Error in aggregateDay for ${app}/${day}:`, error);
+  }
 
   for (const s of sessions.values()) {
     if (!s.ended && s.startedAt != null && s.lastSeenAt != null) {
@@ -113,7 +177,18 @@ async function aggregateRange(app, fromDay, toDay) {
 
 router.post("/:app/start", requireKey, async (req, res) => {
   const sessionId = rid();
-  await logEvent(req.params.app, { type: "start", sessionId });
+  const clientInfo = getClientInfo(req);
+  const { country, city } = req.body || {};
+  
+  await logEvent(req.params.app, { 
+    type: "start", 
+    sessionId,
+    ipAddress: clientInfo.ipAddress,
+    deviceType: clientInfo.deviceType,
+    userAgent: clientInfo.userAgent,
+    country: country || 'unknown',
+    city: city || 'unknown'
+  });
   res.json({ sessionId });
 });
 
@@ -160,18 +235,30 @@ router.get("/:app/status", requireKey, async (req, res) => {
         } catch {
           return;
         }
-        const { type, ts, sessionId } = e;
+        const { type, ts, sessionId, ipAddress, deviceType, country, city } = e;
         if (!sessionId) return;
         
         let s = sessions.get(sessionId);
         if (!s) {
-          s = { startedAt: null, lastSeenAt: null, ended: false };
+          s = { 
+            startedAt: null, 
+            lastSeenAt: null, 
+            ended: false,
+            ipAddress: null,
+            deviceType: null,
+            country: null,
+            city: null
+          };
           sessions.set(sessionId, s);
         }
 
         if (type === "start") {
           s.startedAt = ts;
           s.lastSeenAt = ts;
+          if (ipAddress) s.ipAddress = ipAddress;
+          if (deviceType) s.deviceType = deviceType;
+          if (country) s.country = country;
+          if (city) s.city = city;
         } else if (type === "heartbeat") {
           s.lastSeenAt = Math.max(s.lastSeenAt ?? 0, ts);
         } else if (type === "end") {
@@ -189,6 +276,10 @@ router.get("/:app/status", requireKey, async (req, res) => {
       if (!session.ended && session.lastSeenAt && session.lastSeenAt > fiveMinutesAgo) {
         activeSessions.push({
           sessionId,
+          ipAddress: session.ipAddress || 'unknown',
+          deviceType: session.deviceType || 'unknown',
+          country: session.country || 'unknown',
+          city: session.city || 'unknown',
           startedAt: new Date(session.startedAt).toISOString(),
           lastSeenAt: new Date(session.lastSeenAt).toISOString(),
           secondsSinceLastSeen: Math.floor((now - session.lastSeenAt) / 1000),
@@ -240,6 +331,91 @@ router.delete("/:app/reset", requireKey, async (req, res) => {
   }
 });
 
+// Analytics by location and device
+router.get("/:app/analytics", requireKey, async (req, res) => {
+  const { app } = req.params;
+  const { from, to } = req.query;
+  
+  const startDay = from || new Date().toISOString().slice(0, 10);
+  const endDay = to || startDay;
+  
+  const start = new Date(startDay + "T00:00:00Z");
+  const end = new Date(endDay + "T00:00:00Z");
+  
+  const deviceMap = new Map();
+  const countryMap = new Map();
+  const seenSessions = new Set(); // Global set to avoid double-counting across days
+  
+  // Process all days in range
+  for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+    const day = d.toISOString().slice(0, 10);
+    const file = dayFile(app, day);
+    
+    try {
+      await new Promise((resolve) => {
+        const rl = readline.createInterface({ input: createReadStream(file), crlfDelay: Infinity });
+        
+        rl.on("line", (line) => {
+          if (!line.trim()) return;
+          let e;
+          try {
+            e = JSON.parse(line);
+          } catch {
+            return;
+          }
+          
+          const { type, sessionId, deviceType, country, city } = e;
+          if (type !== "start" || !sessionId) return;
+          
+          // Skip if we've already counted this session
+          if (seenSessions.has(sessionId)) return;
+          seenSessions.add(sessionId);
+          
+          // Count unique sessions per device type
+          if (deviceType) {
+            const current = deviceMap.get(deviceType) || 0;
+            deviceMap.set(deviceType, current + 1);
+          }
+          
+          // Count unique sessions per country and city (only if both are not "unknown")
+          const countryStr = String(country || "").trim();
+          const cityStr = String(city || "").trim();
+          if (countryStr && cityStr && 
+              countryStr.toLowerCase() !== "unknown" && 
+              cityStr.toLowerCase() !== "unknown") {
+            const locationKey = `${countryStr},${cityStr}`;
+            const current = countryMap.get(locationKey) || 0;
+            countryMap.set(locationKey, current + 1);
+          }
+        });
+        rl.on("close", resolve);
+        rl.on("error", () => resolve());
+      });
+    } catch (error) {
+      // File doesn't exist, skip
+    }
+  }
+  
+  const devices = Array.from(deviceMap.entries()).map(([device_type, unique_sessions]) => ({
+    device_type,
+    unique_sessions
+  }));
+  
+  const countries = Array.from(countryMap.entries()).map(([locationKey, visits]) => {
+    const [country, city] = locationKey.split(",");
+    return {
+      country: country.trim(),
+      city: city.trim(),
+      visits
+    };
+  });
+  
+  res.json({
+    devices: devices.sort((a, b) => b.unique_sessions - a.unique_sessions),
+    countries: countries.sort((a, b) => b.visits - a.visits)
+  });
+});
+
 // Get all apps from file system
 router.get("/apps", async (req, res) => {
   try {
@@ -247,7 +423,10 @@ router.get("/apps", async (req, res) => {
     const entries = await readdir(DATA_ROOT, { withFileTypes: true });
     for (const entry of entries) {
       if (entry.isDirectory()) {
-        apps.push(entry.name);
+        // Filter out "electric" since we're using "electrician" instead
+        if (entry.name !== "electric") {
+          apps.push(entry.name);
+        }
       }
     }
     apps.sort();
@@ -255,6 +434,17 @@ router.get("/apps", async (req, res) => {
   } catch (error) {
     console.error("Failed to fetch apps:", error);
     res.status(500).json({ error: "Failed to fetch apps" });
+  }
+});
+
+// Get API keys for all apps (from environment variable)
+router.get("/api-keys", async (req, res) => {
+  try {
+    // Return API keys from environment variable
+    res.json({ apiKeys: API_KEYS });
+  } catch (error) {
+    console.error("Failed to fetch API keys:", error);
+    res.status(500).json({ error: "Failed to fetch API keys" });
   }
 });
 

@@ -391,15 +391,15 @@
        * baseUrl: "https://your-app.onrender.com/v1"
        */
       const CONFIG = {
-        baseUrl: location.origin + "/v1",
+        baseUrl: "https://metrics-server-yjqf.onrender.com/v1",
         // Pre-fill keys per app (optional). If you added API_KEYS in your server .env, mirror them here for convenience.
         appKeys: {
           repairman: "rKey123",
-          electric: "eKey456",
+          electrician: "eKey456",
           profile: "pKey789",
         },
         // Fallback list if /v1/apps is not available:
-        fallbackApps: ["repairman", "electric", "profile"],
+        fallbackApps: ["repairman", "electrician", "profile"],
       };
 
       document.getElementById("baseUrlLabel").textContent = CONFIG.baseUrl;

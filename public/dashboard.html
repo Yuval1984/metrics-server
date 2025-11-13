@@ -103,32 +103,29 @@
       .grid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
-        gap: 12px;
+        gap: 8px;
       }
       .stat {
         background: var(--stat-bg);
-        border-radius: 10px;
-        padding: 16px;
+        border-radius: 8px;
+        padding: 10px 12px;
         text-align: center;
         display: flex;
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        min-height: 100px;
+        min-height: 70px;
         position: relative;
       }
       .stat .muted {
-        font-size: 16px;
+        font-size: 11px;
         font-weight: 600;
         color: var(--muted-fg);
-        position: absolute;
-        top: 16px;
-        left: 50%;
-        transform: translateX(-50%);
-        margin: 0;
+        margin-bottom: 4px;
+        margin: 0 0 4px 0;
       }
       .stat .v {
-        font-size: 28px;
+        font-size: 20px;
         font-weight: 700;
         margin: 0;
       }
@@ -233,17 +230,20 @@
     <div class="row">
       <div class="card">
         <div class="form-group">
-          <label>App</label>
-          <select id="app"></select>
+          <div class="row" style="grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 0;">
+            <div>
+              <label>App</label>
+              <select id="app"></select>
+            </div>
+            <div>
+              <label>API key (auto-fills from config)</label>
+              <input id="apiKey" placeholder="x-api-key if required" />
+            </div>
+          </div>
         </div>
 
         <div class="form-group">
-          <label>API key (auto-fills from config)</label>
-          <input id="apiKey" placeholder="x-api-key if required" />
-        </div>
-
-        <div class="form-group">
-          <label>Date range</label>
+          <label>Date range (for stats)</label>
           <div class="row" style="grid-template-columns: 1fr 1fr">
             <input id="from" type="date" />
             <input id="to" type="date" />
@@ -251,8 +251,18 @@
         </div>
 
         <div style="height: 10px"></div>
-        <button id="load">Load metrics</button>
-        <div class="muted" id="tip"></div>
+        <button id="load" style="
+          padding: 10px 20px;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 600;
+          box-shadow: 0 4px 6px rgba(102, 126, 234, 0.3);
+          transition: all 0.2s ease;
+        " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 12px rgba(102, 126, 234, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 6px rgba(102, 126, 234, 0.3)'">📊 Load metrics</button>
         <div class="error-message" id="errorMessage"></div>
 
         <!-- Real-time status -->
@@ -266,29 +276,29 @@
             "
           >
             <h3 style="margin: 0; font-size: 16px">Real-time Status</h3>
-            <button
-              id="refreshStatus"
-              style="
-                padding: 6px 12px;
-                background: #3b82f6;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                cursor: pointer;
-                font-size: 12px;
-              "
-            >
-              🔄 Refresh
-            </button>
           </div>
           <div id="realtimeStatus">
             <div class="muted">Loading active sessions...</div>
           </div>
         </div>
+
+        <!-- Device Types and Top Countries combined - moved here to reduce spacing -->
+        <div class="card" id="analyticsCard" style="margin-top: 16px; display: block;">
+          <div class="row" style="grid-template-columns: 1fr 1fr; gap: 16px">
+            <div id="deviceCard" style="text-align: center; display: block;">
+              <label>Device Types (Active Sessions)</label>
+              <canvas id="deviceChart" height="280"></canvas>
+            </div>
+            <div id="countryCard" style="display: block;">
+              <label>Top countries</label>
+              <canvas id="countryChart" height="280"></canvas>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div style="display: flex; flex-direction: column; gap: 16px">
-        <!-- Main visits metrics -->
+      <div style="display: flex; flex-direction: column; gap: 12px">
+        <!-- Combined metrics in one row -->
         <div class="card grid">
           <div class="stat">
             <div class="muted">Total visits</div>
@@ -302,10 +312,6 @@
             <div class="muted">Days included</div>
             <div class="v" id="daysCount">—</div>
           </div>
-        </div>
-
-        <!-- Additional metrics -->
-        <div class="card grid">
           <div class="stat">
             <div class="muted">Today visits</div>
             <div class="v" id="todayVisits">—</div>
@@ -320,29 +326,18 @@
           </div>
         </div>
 
+        <!-- Visits chart -->
+        <div class="card" id="dailyCard">
+          <label>Visits</label>
+          <canvas id="dailyChart" height="220"></canvas>
+        </div>
+
         <!-- Per-hour chart -->
         <div class="card">
           <label>Per-hour (pick a day)</label>
           <select id="daySelect"></select>
           <div style="height: 8px"></div>
-          <canvas id="hourChart" height="180"></canvas>
-        </div>
-      </div>
-    </div>
-
-    <div class="card" id="analyticsCard">
-      <div class="row" style="grid-template-columns: 1fr 1fr 0.7fr">
-        <div id="dailyCard">
-          <label>Visits vs Avg duration</label>
-          <canvas id="dailyChart" height="180"></canvas>
-        </div>
-        <div>
-          <label>Device types</label>
-          <canvas id="deviceChart" height="260"></canvas>
-        </div>
-        <div>
-          <label>Top countries</label>
-          <canvas id="countryChart" height="260"></canvas>
+          <canvas id="hourChart" height="220"></canvas>
         </div>
       </div>
     </div>
@@ -360,15 +355,15 @@
        * Otherwise, set a manual list here:
        */
       const CONFIG = {
-        baseUrl: location.origin + "/v1", // same origin. Change to your Render URL if remote.
+        baseUrl: "https://metrics-server-yjqf.onrender.com/v1", // Remote Render server
         // Optional: map known app -> api key, will auto-fill on selection:
         appKeys: {
           repairman: "rKey123",
-          electric: "eKey456",
+          electrician: "eKey456",
           profile: "pKey789",
         },
         // Fallback apps list if /v1/apps is not available:
-        fallbackApps: ["repairman", "electric", "profile"],
+        fallbackApps: ["repairman", "electrician", "profile"],
       };
 
       // Load API keys from database
@@ -389,7 +384,6 @@
       const fromEl = document.getElementById("from");
       const toEl = document.getElementById("to");
       const loadBtn = document.getElementById("load");
-      const tipEl = document.getElementById("tip");
       const totalEl = document.getElementById("totalVisits");
       const avgEl = document.getElementById("avgDur");
       const daysEl = document.getElementById("daysCount");
@@ -400,7 +394,6 @@
       const daySelect = document.getElementById("daySelect");
       const errorEl = document.getElementById("errorMessage");
       const realtimeStatusEl = document.getElementById("realtimeStatus");
-      const refreshStatusBtn = document.getElementById("refreshStatus");
 
       let dailyChart, hourChart, deviceChart, countryChart;
       const PALETTE = [
@@ -426,26 +419,37 @@
       };
       const httpGet = async (url, key) => {
         const headers = key ? { "x-api-key": key } : {};
-        const res = await fetch(url, { headers });
-        if (!res.ok) {
-          let errorMsg = `HTTP ${res.status}`;
-          if (res.status === 401) {
-            errorMsg =
-              "API key required or invalid. Please check your API key configuration.";
-          } else if (res.status === 403) {
-            errorMsg = "Access forbidden. API key may be invalid or expired.";
-          } else if (res.status === 404) {
-            errorMsg = "App not found. Please check the app name.";
-          } else if (res.status >= 500) {
-            errorMsg = "Server error. Please try again later.";
+        console.log("Making GET request to:", url, "with headers:", headers);
+        try {
+          const res = await fetch(url, { headers });
+          console.log("Response status:", res.status, res.statusText);
+          if (!res.ok) {
+            let errorMsg = `HTTP ${res.status}`;
+            if (res.status === 401) {
+              errorMsg =
+                "API key required or invalid. Please check your API key configuration.";
+            } else if (res.status === 403) {
+              errorMsg = "Access forbidden. API key may be invalid or expired.";
+            } else if (res.status === 404) {
+              errorMsg = "App not found. Please check the app name.";
+            } else if (res.status >= 500) {
+              errorMsg = "Server error. Please try again later.";
+            }
+            // Add debug info for status endpoint
+            if (url.includes("/status")) {
+              errorMsg += ` (Status endpoint: ${res.status})`;
+            }
+            const errorText = await res.text().catch(() => "");
+            console.error("Error response body:", errorText);
+            throw new Error(errorMsg);
           }
-          // Add debug info for status endpoint
-          if (url.includes("/status")) {
-            errorMsg += ` (Status endpoint: ${res.status})`;
-          }
-          throw new Error(errorMsg);
+          const data = await res.json();
+          console.log("Response data:", data);
+          return data;
+        } catch (error) {
+          console.error("Fetch error:", error);
+          throw error;
         }
-        return res.json();
       };
 
       const httpPost = async (url, key, body) => {
@@ -453,32 +457,46 @@
           "Content-Type": "application/json",
           ...(key ? { "x-api-key": key } : {}),
         };
-        const res = await fetch(url, {
-          method: "POST",
-          headers,
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) {
-          let errorMsg = `HTTP ${res.status}`;
-          if (res.status === 401) {
-            errorMsg =
-              "API key required or invalid. Please check your API key configuration.";
-          } else if (res.status === 403) {
-            errorMsg = "Access forbidden. API key may be invalid or expired.";
-          } else if (res.status === 404) {
-            errorMsg = "App not found. Please check the app name.";
-          } else if (res.status >= 500) {
-            errorMsg = "Server error. Please try again later.";
+        console.log("Making POST request to:", url, "with body:", body, "headers:", headers);
+        try {
+          const res = await fetch(url, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(body),
+          });
+          console.log("POST Response status:", res.status, res.statusText);
+          if (!res.ok) {
+            let errorMsg = `HTTP ${res.status}`;
+            if (res.status === 401) {
+              errorMsg =
+                "API key required or invalid. Please check your API key configuration.";
+            } else if (res.status === 403) {
+              errorMsg = "Access forbidden. API key may be invalid or expired.";
+            } else if (res.status === 404) {
+              errorMsg = "App not found. Please check the app name.";
+            } else if (res.status >= 500) {
+              errorMsg = "Server error. Please try again later.";
+            }
+            const errorText = await res.text().catch(() => "");
+            console.error("POST Error response body:", errorText);
+            throw new Error(errorMsg);
           }
-          throw new Error(errorMsg);
+          // Handle 204 No Content responses
+          if (res.status === 204) {
+            return null;
+          }
+          const data = await res.json().catch(() => null);
+          console.log("POST Response data:", data);
+          return data;
+        } catch (error) {
+          console.error("POST Fetch error:", error);
+          throw error;
         }
-        return res.json();
       };
 
       const showError = (message) => {
         errorEl.textContent = message;
         errorEl.classList.add("show");
-        tipEl.textContent = "";
       };
 
       const hideError = () => {
@@ -622,31 +640,48 @@
             ${sessionsHtml}
           `;
 
-          // Also refresh bottom analytics from live sessions for consistency
+          // Build charts immediately from active sessions data (synchronous, no try-catch delay)
+          const sessions = window.lastStatusSessions || [];
+          const byType = new Map();
+          const byLocation = new Map();
+          
+          sessions.forEach((s) => {
+            const t = String(s.deviceType || s.device_type || "unknown")
+              .trim()
+              .toLowerCase();
+            const country = String(s.country || "").trim();
+            const city = String(s.city || "").trim();
+            
+            // Only include if both country and city are not "unknown" and not empty
+            if (country && city && country.toLowerCase() !== "unknown" && city.toLowerCase() !== "unknown") {
+              const locationKey = `${country}, ${city}`;
+              byLocation.set(locationKey, (byLocation.get(locationKey) || 0) + 1);
+            }
+            
+            byType.set(t, (byType.get(t) || 0) + 1);
+          });
+          
+          const typeCounts = Array.from(byType.entries()).map(
+            ([device_type, count]) => ({
+              device_type,
+              unique_sessions: count,
+            })
+          );
+          const countryCounts = Array.from(byLocation.entries()).map(
+            ([location, count]) => ({ 
+              country: location.split(", ")[0],
+              city: location.split(", ")[1],
+              visits: count 
+            })
+          );
+          
+          // Build charts immediately - they'll handle visibility
           try {
-            const sessions = window.lastStatusSessions;
-            const byType = new Map();
-            const byCountry = new Map();
-            sessions.forEach((s) => {
-              const t = String(s.deviceType || s.device_type || "unknown")
-                .trim()
-                .toLowerCase();
-              const c = String(s.country || "unknown").trim();
-              byType.set(t, (byType.get(t) || 0) + 1);
-              byCountry.set(c, (byCountry.get(c) || 0) + 1);
-            });
-            const typeCounts = Array.from(byType.entries()).map(
-              ([device_type, count]) => ({
-                device_type,
-                unique_sessions: count,
-              })
-            );
-            const countryCounts = Array.from(byCountry.entries()).map(
-              ([country, count]) => ({ country, visits: count })
-            );
-            if (typeCounts.length) buildDeviceChart(typeCounts);
-            if (countryCounts.length) buildCountryChart(countryCounts);
-          } catch {}
+            buildDeviceChart(typeCounts);
+            buildCountryChart(countryCounts);
+          } catch (err) {
+            console.error("Error building charts from sessions:", err);
+          }
         } catch (e) {
           // Handle specific error cases
           if (e.message.includes("API key required")) {
@@ -682,7 +717,9 @@
 
       const setAppsUI = async () => {
         const apps = await tryLoadApps();
-        appEl.innerHTML = apps
+        // Filter out "electric" since we're using "electrician" instead
+        const filteredApps = apps.filter(a => a !== "electric");
+        appEl.innerHTML = filteredApps
           .map((a) => `<option value="${a}">${a}</option>`)
           .join("");
         // set default key if configured
@@ -690,26 +727,38 @@
         if (CONFIG.appKeys[first]) apiKeyEl.value = CONFIG.appKeys[first];
       };
 
-      appEl.addEventListener("change", () => {
+      appEl.addEventListener("change", async () => {
         const a = appEl.value;
         apiKeyEl.value = CONFIG.appKeys[a] || "";
-        // Auto-load metrics when app changes
-        loadStats();
-        // Also load real-time status
-        loadRealtimeStatus();
+        
+        // Reset data display while loading
+        totalEl.textContent = avgEl.textContent = daysEl.textContent = "—";
+        todayEl.textContent = monthEl.textContent = totalDurEl.textContent = "—";
+        if (dailyChart) dailyChart.destroy();
+        if (hourChart) hourChart.destroy();
+        if (deviceChart) deviceChart.destroy();
+        if (countryChart) countryChart.destroy();
+        daySelect.innerHTML = "";
+        realtimeStatusEl.innerHTML = '<div class="muted">Loading...</div>';
+        
+        // Step 1: Start session for the app
+        await trackAppSession(a);
+        
+        // Step 2: Load stats (historical aggregated data) after session is started
+        await loadStats();
+        
+        // Step 3: Load status (active sessions) for real-time status section
+        await loadRealtimeStatus();
       });
 
-      // Refresh button for real-time status
-      refreshStatusBtn.addEventListener("click", loadRealtimeStatus);
 
       /** ====== charts ====== */
       const buildDaily = (days) => {
         const labels = days.map((d) => d.day);
         const totals = days.map((d) => d.totalVisits);
-        const avg = days.map((d) => Math.round(d.avgDurationMs / 1000)); // in seconds for readability
 
         const dailyCard = document.getElementById("dailyCard");
-        const hasAny = totals.some((v) => v > 0) || avg.some((v) => v > 0);
+        const hasAny = totals.some((v) => v > 0);
         if (!hasAny) {
           dailyCard.style.display = "none";
           if (dailyChart) dailyChart.destroy();
@@ -734,20 +783,6 @@
                 borderWidth: 1,
                 hoverBackgroundColor: "#3b82f6",
                 hoverBorderColor: "#2563eb",
-                hoverBorderWidth: 2,
-              },
-              {
-                label: "Avg duration (sec)",
-                data: avg,
-                backgroundColor: avg.map(
-                  (_, i) => PALETTE[(i + 3) % PALETTE.length] + "88"
-                ),
-                borderColor: avg.map(
-                  (_, i) => PALETTE[(i + 3) % PALETTE.length]
-                ),
-                borderWidth: 1,
-                hoverBackgroundColor: "#10b981",
-                hoverBorderColor: "#059669",
                 hoverBorderWidth: 2,
               },
             ],
@@ -778,7 +813,9 @@
 
       const buildDeviceChart = (counts) => {
         if (deviceChart) deviceChart.destroy();
-        const ctx = document.getElementById("deviceChart").getContext("2d");
+        const deviceCard = document.getElementById("deviceCard");
+        const analyticsCard = document.getElementById("analyticsCard");
+        
         let labels;
         let data;
 
@@ -802,6 +839,25 @@
             Number(r.unique_sessions || r.visits || r.count || 0)
           );
         }
+        
+        // Show analytics card first
+        analyticsCard.style.display = "block";
+        
+        if (!labels.length || !data.some(d => d > 0)) {
+          // Hide device chart if no data
+          deviceCard.style.display = "none";
+          // Check if country chart is also hidden, then hide entire card
+          const countryCard = document.getElementById("countryCard");
+          if (countryCard && countryCard.style.display === "none") {
+            analyticsCard.style.display = "none";
+          }
+          return;
+        }
+        
+        // Show device card
+        deviceCard.style.display = "block";
+        
+        const ctx = document.getElementById("deviceChart").getContext("2d");
         deviceChart = new Chart(ctx, {
           type: "pie",
           data: {
@@ -838,9 +894,43 @@
 
       const buildCountryChart = (counts) => {
         if (countryChart) countryChart.destroy();
+        const countryCard = document.getElementById("countryCard");
+        const analyticsCard = document.getElementById("analyticsCard");
+        
+        // Filter out entries where country or city is "unknown" or empty
+        const filtered = counts.filter((r) => {
+          const country = String(r.country || "").trim().toLowerCase();
+          const city = String(r.city || "").trim().toLowerCase();
+          return country && city && country !== "unknown" && city !== "unknown";
+        });
+        
+        // Show analytics card first
+        analyticsCard.style.display = "block";
+        
+        if (filtered.length === 0) {
+          // Hide only the country chart section if no valid data
+          countryCard.style.display = "none";
+          // Check if device chart is also hidden, then hide entire card
+          const deviceCard = document.getElementById("deviceCard");
+          if (deviceCard && deviceCard.style.display === "none") {
+            analyticsCard.style.display = "none";
+          }
+          return;
+        }
+        
+        // Show the country card
+        countryCard.style.display = "block";
+        
         const ctx = document.getElementById("countryChart").getContext("2d");
-        const labels = counts.map((r) => r.country || "unknown");
-        const data = counts.map((r) => Number(r.visits || r.count || 0));
+        
+        // Create labels as "Country, City"
+        const labels = filtered.map((r) => {
+          const country = String(r.country || "").trim();
+          const city = String(r.city || "").trim();
+          return `${country}, ${city}`;
+        });
+        const data = filtered.map((r) => Number(r.visits || r.count || 0));
+        
         countryChart = new Chart(ctx, {
           type: "bar",
           data: {
@@ -869,7 +959,16 @@
           options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { position: "top" } },
+            plugins: { 
+              legend: { position: "top" },
+              tooltip: {
+                callbacks: {
+                  label: (context) => {
+                    return `${context.dataset.label}: ${context.parsed.y}`;
+                  }
+                }
+              }
+            },
             scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
           },
         });
@@ -928,10 +1027,9 @@
         });
       };
 
-      /** ====== main load ====== */
+      /** ====== main load - Stats (Historical Aggregated Data) ====== */
       const loadStats = async () => {
         loadBtn.disabled = true;
-        tipEl.textContent = "Loading…";
         hideError();
 
         const app = appEl.value;
@@ -950,9 +1048,12 @@
         if (from && to) url += `?from=${from}&to=${to}`;
 
         try {
+          console.log("Loading stats from:", url);
           const data = await httpGet(url, key);
+          console.log("Stats data received:", data);
           rawEl.textContent = JSON.stringify(data, null, 2);
           const days = data.days || [];
+          console.log("Days found:", days.length);
 
           // Top stats
           const totalVisits = days.reduce(
@@ -981,6 +1082,15 @@
             0
           );
 
+          console.log("Updating display with:", {
+            totalVisits,
+            avgDur,
+            daysCount: days.length,
+            todayVisits,
+            monthVisits,
+            totalDurationMs
+          });
+
           // Update display
           totalEl.textContent = totalVisits;
           avgEl.textContent = fmtMs(avgDur);
@@ -1008,11 +1118,40 @@
             buildHour({});
           }
 
-          tipEl.textContent =
-            from && to
-              ? `Showing ${from} → ${to} (UTC)`
-              : `Showing today (UTC)`;
+          // Load analytics for country chart in background (non-blocking)
+          // Real-time data from loadRealtimeStatus already shows the chart immediately
+          // This is just a fallback for historical data if no real-time data exists
+          httpGet(
+            `${CONFIG.baseUrl}/${encodeURIComponent(app)}/analytics?from=${
+              from || new Date().toISOString().slice(0, 10)
+            }&to=${to || new Date().toISOString().slice(0, 10)}`,
+            key
+          ).then((an) => {
+            // Check if we have valid countries (not "unknown")
+            const validCountries = an && Array.isArray(an.countries) 
+              ? an.countries.filter(c => {
+                  const country = String(c.country || "").trim().toLowerCase();
+                  const city = String(c.city || "").trim().toLowerCase();
+                  return country && city && country !== "unknown" && city !== "unknown";
+                })
+              : [];
+            // Only update country chart if we have historical data and no active sessions data
+            // Otherwise, the real-time data from loadRealtimeStatus takes precedence
+            if (validCountries.length > 0) {
+              const countryCard = document.getElementById("countryCard");
+              // Only update if country card is hidden (no real-time data)
+              if (countryCard && countryCard.style.display === "none") {
+                buildCountryChart(validCountries);
+              }
+            }
+          }).catch((error) => {
+            // Silently fail - real-time data is already showing
+            console.log("Could not load analytics (non-critical):", error);
+          });
+
+          console.log("Display updated successfully");
         } catch (e) {
+          console.error("Error loading stats:", e);
           showError(e.message);
           rawEl.textContent = e.stack || String(e);
           totalEl.textContent = avgEl.textContent = daysEl.textContent = "—";
@@ -1027,8 +1166,196 @@
         }
       };
 
+      /** ====== Status (Active Sessions) - for real-time status section only ====== */
+      const loadStatus = async () => {
+        // This function is only for updating the real-time status section
+        // It doesn't update the stats blocks or charts - that's done by loadStats()
+        // This is a separate function that's called independently
+      };
+
+      /** ====== Session Management ====== */
+      let currentSessionId = null;
+      let heartbeatInterval = null;
+      const DASHBOARD_APP = "dashboard"; // App name for tracking dashboard usage
+
+      // Start session for dashboard tracking
+      const startDashboardSession = async () => {
+        try {
+          const key = CONFIG.appKeys[DASHBOARD_APP] || undefined;
+          // Get location before starting session
+          const location = await getLocationFromIP();
+          const response = await httpPost(
+            `${CONFIG.baseUrl}/${DASHBOARD_APP}/start`,
+            key,
+            {
+              country: location.country,
+              city: location.city
+            }
+          );
+          currentSessionId = response.sessionId;
+          console.log("Dashboard session started:", currentSessionId, "Location:", location);
+          
+          // Start heartbeat interval (every 30 seconds)
+          heartbeatInterval = setInterval(async () => {
+            if (currentSessionId) {
+              try {
+                await httpPost(
+                  `${CONFIG.baseUrl}/${DASHBOARD_APP}/heartbeat`,
+                  key,
+                  { sessionId: currentSessionId }
+                );
+                console.log("Dashboard heartbeat sent");
+              } catch (error) {
+                console.error("Heartbeat failed:", error);
+              }
+            }
+          }, 30000); // 30 seconds
+        } catch (error) {
+          console.error("Failed to start dashboard session:", error);
+        }
+      };
+
+      // End session when page unloads
+      const endDashboardSession = async () => {
+        if (currentSessionId) {
+          try {
+            const key = CONFIG.appKeys[DASHBOARD_APP] || undefined;
+            // Use fetch with keepalive for reliability on page unload
+            const headers = {
+              "Content-Type": "application/json",
+              ...(key ? { "x-api-key": key } : {}),
+            };
+            await fetch(
+              `${CONFIG.baseUrl}/${DASHBOARD_APP}/end`,
+              {
+                method: "POST",
+                headers,
+                body: JSON.stringify({ sessionId: currentSessionId }),
+                keepalive: true
+              }
+            );
+            console.log("Dashboard session ended");
+          } catch (error) {
+            console.error("Failed to end dashboard session:", error);
+          }
+        }
+        if (heartbeatInterval) {
+          clearInterval(heartbeatInterval);
+        }
+      };
+
+      // Get location from IP using a free geo-IP service
+      const getLocationFromIP = async () => {
+        try {
+          // Try ipapi.co first (free, no key needed for basic usage)
+          const response = await fetch('https://ipapi.co/json/');
+          if (response.ok) {
+            const data = await response.json();
+            return {
+              country: data.country_name || data.country || 'unknown',
+              city: data.city || 'unknown'
+            };
+          }
+        } catch (error) {
+          console.log("Could not get location from ipapi.co:", error);
+        }
+        
+        try {
+          // Fallback to ip-api.com
+          const response = await fetch('http://ip-api.com/json/?fields=country,city');
+          if (response.ok) {
+            const data = await response.json();
+            return {
+              country: data.country || 'unknown',
+              city: data.city || 'unknown'
+            };
+          }
+        } catch (error) {
+          console.log("Could not get location from ip-api.com:", error);
+        }
+        
+        return { country: 'unknown', city: 'unknown' };
+      };
+
+      // Track session for each app when viewing stats
+      const startAppSession = async (app) => {
+        try {
+          const key = CONFIG.appKeys[app] || undefined;
+          // Get location before starting session
+          const location = await getLocationFromIP();
+          const response = await httpPost(
+            `${CONFIG.baseUrl}/${app}/start`,
+            key,
+            {
+              country: location.country,
+              city: location.city
+            }
+          );
+          console.log(`Session started for app ${app}:`, response.sessionId, "Location:", location);
+          return response.sessionId;
+        } catch (error) {
+          console.error(`Failed to start session for ${app}:`, error);
+          return null;
+        }
+      };
+
+      // End session for an app
+      const endAppSession = async (app, sessionId) => {
+        if (!sessionId) return;
+        try {
+          const key = CONFIG.appKeys[app] || undefined;
+          await httpPost(
+            `${CONFIG.baseUrl}/${app}/end`,
+            key,
+            { sessionId }
+          );
+          console.log(`Session ended for app ${app}`);
+        } catch (error) {
+          console.error(`Failed to end session for ${app}:`, error);
+        }
+      };
+
+      // Store app sessions
+      const appSessions = new Map(); // app -> { sessionId, heartbeatInterval }
+
+      // Start session for an app and set up heartbeat
+      const trackAppSession = async (app) => {
+        // End previous session if exists
+        if (appSessions.has(app)) {
+          const prev = appSessions.get(app);
+          if (prev.heartbeatInterval) {
+            clearInterval(prev.heartbeatInterval);
+          }
+          await endAppSession(app, prev.sessionId);
+        }
+
+        // Start new session
+        const sessionId = await startAppSession(app);
+        if (!sessionId) return;
+
+        // Set up heartbeat (every 30 seconds)
+        const heartbeatInterval = setInterval(async () => {
+          try {
+            const key = CONFIG.appKeys[app] || undefined;
+            await httpPost(
+              `${CONFIG.baseUrl}/${app}/heartbeat`,
+              key,
+              { sessionId }
+            );
+            console.log(`Heartbeat sent for app ${app}`);
+          } catch (error) {
+            console.error(`Heartbeat failed for app ${app}:`, error);
+          }
+        }, 30000); // 30 seconds
+
+        appSessions.set(app, { sessionId, heartbeatInterval });
+      };
+
       /** init */
       (async () => {
+        // Start dashboard session tracking
+        await startDashboardSession();
+
         // Load API keys from database first
         await loadApiKeys();
 
@@ -1042,9 +1369,23 @@
         toEl.value = endISO;
 
         await setAppsUI();
-        loadBtn.onclick = loadStats;
-        await loadStats();
-        await loadRealtimeStatus();
+        // Attach button click handler - start session, then load stats and status
+        loadBtn.addEventListener("click", async () => {
+          const app = appEl.value;
+          if (app) {
+            await trackAppSession(app);
+            await loadStats();
+            await loadRealtimeStatus();
+          }
+        });
+        
+        // Initial load - start session for selected app, then load stats and status
+        const initialApp = appEl.value;
+        if (initialApp) {
+          await trackAppSession(initialApp);
+          await loadStats();
+          await loadRealtimeStatus();
+        }
 
         // Theme initialization
         const savedTheme = localStorage.getItem("metrics_theme");
@@ -1064,32 +1405,70 @@
             }
           });
 
-        // Load analytics for device/country charts
-        try {
-          const app = document.getElementById("app").value;
-          const key = document.getElementById("apiKey").value || undefined;
-          const an = await httpGet(
-            `${CONFIG.baseUrl}/${encodeURIComponent(app)}/analytics?from=${
-              fromEl.value
-            }&to=${toEl.value}`,
-            key
-          );
+        // Load analytics in background (non-blocking) - real-time data already shows charts
+        // This is just a fallback for historical data
+        const app = document.getElementById("app").value;
+        const key = document.getElementById("apiKey").value || undefined;
+        httpGet(
+          `${CONFIG.baseUrl}/${encodeURIComponent(app)}/analytics?from=${
+            fromEl.value
+          }&to=${toEl.value}`,
+          key
+        ).then((an) => {
           const hasDevices =
             an && Array.isArray(an.devices) && an.devices.length > 0;
-          const hasCountries =
-            an && Array.isArray(an.countries) && an.countries.length > 0;
-          const analyticsCard = document.getElementById("analyticsCard");
-          if (!hasDevices && !hasCountries) {
-            analyticsCard.style.display = "none";
-          } else {
-            analyticsCard.style.display = "block";
-            if (hasDevices) buildDeviceChart(an.devices);
-            if (hasCountries) buildCountryChart(an.countries);
+          // Filter countries to only include valid ones (not "unknown")
+          const validCountries = an && Array.isArray(an.countries) 
+            ? an.countries.filter(c => {
+                const country = String(c.country || "").trim().toLowerCase();
+                const city = String(c.city || "").trim().toLowerCase();
+                return country && city && country !== "unknown" && city !== "unknown";
+              })
+            : [];
+          const hasCountries = validCountries.length > 0;
+          // Only update if charts are hidden (no real-time data)
+          const countryCard = document.getElementById("countryCard");
+          const deviceCard = document.getElementById("deviceCard");
+          if (hasDevices && deviceCard && deviceCard.style.display === "none") {
+            buildDeviceChart(an.devices);
           }
-        } catch {}
+          if (hasCountries && countryCard && countryCard.style.display === "none") {
+            buildCountryChart(validCountries);
+          }
+        }).catch(() => {
+          // Silently fail - real-time data is already showing
+        });
 
         // Auto-refresh real-time status every 10 seconds
         setInterval(loadRealtimeStatus, 10000);
+
+        // Clean up on page unload
+        window.addEventListener("beforeunload", endDashboardSession);
+        window.addEventListener("pagehide", endDashboardSession);
+        
+        // Also end all app sessions on unload
+        window.addEventListener("beforeunload", () => {
+          for (const [app, session] of appSessions.entries()) {
+            if (session.heartbeatInterval) {
+              clearInterval(session.heartbeatInterval);
+            }
+            // Use fetch with keepalive for reliability
+            const key = CONFIG.appKeys[app] || undefined;
+            const headers = {
+              "Content-Type": "application/json",
+              ...(key ? { "x-api-key": key } : {}),
+            };
+            fetch(
+              `${CONFIG.baseUrl}/${app}/end`,
+              {
+                method: "POST",
+                headers,
+                body: JSON.stringify({ sessionId: session.sessionId }),
+                keepalive: true
+              }
+            ).catch(() => {}); // Ignore errors on unload
+          }
+        });
       })();
     </script>
   </body>
