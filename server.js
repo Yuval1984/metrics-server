@@ -9,6 +9,7 @@ import { fileURLToPath } from "url";
 import metricsFile from "./src/metrics-file.js";
 import emailRouter from "./src/email.js";
 import cinemaRouter from "./src/cinema.js";
+import weatherRouter from "./src/weather.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -148,6 +149,9 @@ app.get("/", (_req, res) => res.send(`
 
   // Cinema API endpoint
   app.use("/v1/cinema", cinemaRouter);
+
+  // Weather API endpoint
+  app.use("/v1/weather-channel", weatherRouter);
 
   app.listen(PORT, () =>
     console.log(`Metrics listening on :${PORT} (storage=${usePg ? "postgres" : "file"})`)
