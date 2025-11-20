@@ -8,6 +8,7 @@ import { fileURLToPath } from "url";
 // import both routers; choose by env
 import metricsFile from "./src/metrics-file.js";
 import emailRouter from "./src/email.js";
+import cinemaRouter from "./src/cinema.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -144,6 +145,9 @@ app.get("/", (_req, res) => res.send(`
 
   // Email API endpoint
   app.use("/v1/email", emailRouter);
+
+  // Cinema API endpoint
+  app.use("/v1/cinema", cinemaRouter);
 
   app.listen(PORT, () =>
     console.log(`Metrics listening on :${PORT} (storage=${usePg ? "postgres" : "file"})`)
